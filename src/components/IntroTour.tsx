@@ -589,15 +589,28 @@ export default function IntroTour({ uid, onVoltooid }: IntroTourProps) {
             position: "fixed",
             zIndex: 9990,
             background: "#FFFFFF",
-            borderRadius: 16,
-            padding: "16px 18px",
-            boxShadow: "0 16px 48px rgba(0,0,0,0.24)",
-            width: tooltipBreedte,
-            maxHeight: "85vh",
+            boxShadow: "0 -4px 32px rgba(0,0,0,0.15)",
             overflowY: "auto" as const,
-            ...(tooltipCentered
-              ? { top: "50%", left: "50%", transform: "translate(-50%, -50%)" }
-              : { top: tooltipTop, left: tooltipLeft, transform: "none" }
+            ...(typeof window !== "undefined" && window.innerWidth < 640
+              ? {
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  borderRadius: "20px 20px 0 0",
+                  padding: "20px 20px 32px",
+                  maxHeight: "70vh",
+                  width: "100%",
+                }
+              : {
+                  borderRadius: 16,
+                  padding: "20px 22px",
+                  width: tooltipBreedte,
+                  maxHeight: "85vh",
+                  ...(tooltipCentered
+                    ? { top: "50%", left: "50%", transform: "translate(-50%, -50%)" }
+                    : { top: tooltipTop, left: tooltipLeft, transform: "none" }
+                  ),
+                }
             ),
           }}
         >
