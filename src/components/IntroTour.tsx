@@ -489,7 +489,7 @@ export default function IntroTour({ uid, onVoltooid }: IntroTourProps) {
   const herbereken = useCallback(() => {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const breedte = Math.min(340, vw - 32);
+    const breedte = Math.min(340, vw - 24);
     const hoogte = 420;
     setTooltipBreedte(breedte);
 
@@ -568,7 +568,7 @@ export default function IntroTour({ uid, onVoltooid }: IntroTourProps) {
       <button
         onClick={voltooien}
         style={{
-          position: "fixed", top: 16, right: 16, zIndex: 9991,
+          position: "fixed", top: typeof window !== "undefined" && window.innerWidth < 480 ? 12 : 16, right: typeof window !== "undefined" && window.innerWidth < 480 ? 12 : 16, zIndex: 9991,
           fontSize: 12, padding: "6px 14px", borderRadius: 20,
           background: "rgba(255,255,255,0.15)", color: "white",
           border: "1px solid rgba(255,255,255,0.3)", cursor: "pointer",
@@ -590,10 +590,10 @@ export default function IntroTour({ uid, onVoltooid }: IntroTourProps) {
             zIndex: 9990,
             background: "#FFFFFF",
             borderRadius: 16,
-            padding: "20px 22px",
+            padding: "16px 18px",
             boxShadow: "0 16px 48px rgba(0,0,0,0.24)",
             width: tooltipBreedte,
-            maxHeight: "88vh",
+            maxHeight: "85vh",
             overflowY: "auto" as const,
             ...(tooltipCentered
               ? { top: "50%", left: "50%", transform: "translate(-50%, -50%)" }
@@ -603,15 +603,15 @@ export default function IntroTour({ uid, onVoltooid }: IntroTourProps) {
         >
           {/* Illustratie */}
           {IllustratieComponent && (
-            <div style={{ marginBottom: 8 }}>
+            <div style={{ marginBottom: 8, maxHeight: typeof window !== "undefined" && window.innerWidth < 480 ? 120 : 160, overflow: "hidden" }}>
               <IllustratieComponent key={stap} />
             </div>
           )}
 
-          <p style={{ fontSize: 15, fontWeight: 700, color: "#0F172A", margin: "0 0 6px" }}>
+          <p style={{ fontSize: typeof window !== "undefined" && window.innerWidth < 480 ? 14 : 15, fontWeight: 700, color: "#0F172A", margin: "0 0 6px" }}>
             {huidigStap.titel}
           </p>
-          <p style={{ fontSize: 13, color: "#64748B", lineHeight: 1.6, margin: "0 0 16px" }}>
+          <p style={{ fontSize: typeof window !== "undefined" && window.innerWidth < 480 ? 12 : 13, color: "#64748B", lineHeight: 1.6, margin: "0 0 16px" }}>
             {huidigStap.tekst}
           </p>
 
@@ -632,7 +632,7 @@ export default function IntroTour({ uid, onVoltooid }: IntroTourProps) {
               <button
                 onClick={() => setStap(s => s - 1)}
                 style={{
-                  flex: 1, fontSize: 13, padding: "10px 0", borderRadius: 8,
+                  flex: 1, fontSize: 13, padding: typeof window !== "undefined" && window.innerWidth < 480 ? "8px 0" : "10px 0", borderRadius: 8,
                   border: "1px solid #E8ECF0", background: "white",
                   color: "#374151", cursor: "pointer",
                 }}
@@ -643,7 +643,7 @@ export default function IntroTour({ uid, onVoltooid }: IntroTourProps) {
             <button
               onClick={() => isLaatste ? voltooien() : setStap(s => s + 1)}
               style={{
-                flex: 2, fontSize: 13, padding: "10px 0", borderRadius: 8,
+                flex: 2, fontSize: 13, padding: typeof window !== "undefined" && window.innerWidth < 480 ? "8px 0" : "10px 0", borderRadius: 8,
                 border: "none", background: "#2563EB",
                 color: "white", cursor: "pointer", fontWeight: 500,
               }}
