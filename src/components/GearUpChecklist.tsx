@@ -25,6 +25,8 @@ function buildChecklist(vak: Vak, niveau: Onderwijsniveau): ChecklistItem[] {
       : "Grafische rekenmachine (opgeladen + resetklaar)";
     items.push({ id: "gr", label: grLabel, kategorie: "hulpmiddel", verplicht: true });
   }
+  if (vak.hulpmiddelen.includes("RM"))
+    items.push({ id: "rm", label: "Eenvoudige rekenmachine", kategorie: "hulpmiddel", verplicht: true });
   if (vak.hulpmiddelen.includes("WBK-NL"))
     items.push({ id: "wbk-nl", label: "Nederlands woordenboek", kategorie: "hulpmiddel", verplicht: true });
   if (vak.hulpmiddelen.includes("WBK-EN-NL"))

@@ -5,9 +5,13 @@ import { Vak, Onderwijsniveau, Profiel } from "@/types";
 import { useZenTimer } from "@/hooks/useZenTimer";
 import { Portal } from "@/components/Portal";
 import AdemhalingOefening from "@/components/AdemhalingOefening";
+import { StudieSessie } from "@/types/agenda";
+import { useAgenda, getHuidigBlok, getBlokEindtijd, useHerplanLimiet } from "@/hooks/useAgenda";
+import TimerCheckIn from "@/components/TimerCheckIn";
+import HerplanningPreview from "@/components/HerplanningPreview";
 
 type Geluid = "stilte" | "brown" | "lofi";
-type Preset = "25_5" | "50_10" | "eigen";
+type Preset = "25_5" | "50_10" | "eigen" | "ingepland";
 
 // ─── Audio helpers ────────────────────────────────────────────────────────────
 
@@ -99,19 +103,30 @@ interface ZenConfig {
   doel: string;
   focusDuur: number;
   pauzeDuur: number;
+  agendaSessieId?: string;
 }
 
 // ─── Goal modal ───────────────────────────────────────────────────────────────
+
+interface VandaagSessie {
+  sessieId: string;
+  vakId: string;
+  doel: string;
+  vakNaam: string;
+  kleur: string;
+  duurMinuten: number;
+}
 
 interface GoalModalProps {
   vakken: Vak[];
   niveau: Onderwijsniveau;
   profiel: Profiel;
+  vandaagSessies?: VandaagSessie[];
   onStart: (cfg: ZenConfig) => void;
   onClose: () => void;
 }
 
-function GoalModal({ vakken, onStart, onClose }: GoalModalProps) {
+function GoalModal({ vakken, vandaagSessies = [], onStart, onClose }: GoalModalProps) {
   const ceVakken = vakken.filter(v => !v.isSchoolexamen);
   const [selectedVakId, setSelectedVakId] = useState(ceVakken[0]?.id ?? "");
   const selectedVak = ceVakken.find(v => v.id === selectedVakId) ?? ceVakken[0];
@@ -120,16 +135,33 @@ function GoalModal({ vakken, onStart, onClose }: GoalModalProps) {
   const [eigenFocus, setEigenFocus] = useState("25");
   const [eigenPauze, setEigenPauze] = useState("5");
   const [error, setError] = useState("");
+  const [geselecteerdeIngeplandeSessie, setGeselecteerdeIngeplandeSessie] = useState<VandaagSessie | null>(null);
+  const pendingDoel = useRef<string | null>(null);
 
   useEffect(() => {
-    if (selectedVak) setSelectedDoel(selectedVak.syllabus[0] ?? "");
+    if (pendingDoel.current !== null) {
+      setSelectedDoel(pendingDoel.current);
+      pendingDoel.current = null;
+    } else if (selectedVak) {
+      setSelectedDoel(selectedVak.syllabus[0] ?? "");
+    }
   }, [selectedVakId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const presets: { key: Preset; label: string }[] = [
+  const selecteerIngeplandeSessie = (s: VandaagSessie) => {
+    setGeselecteerdeIngeplandeSessie(s);
+    pendingDoel.current = s.doel;
+    setSelectedVakId(s.vakId);
+    setPreset("ingepland");
+  };
+
+  const vaste: { key: Preset; label: string }[] = [
     { key: "25_5", label: "25 / 5 min" },
     { key: "50_10", label: "50 / 10 min" },
     { key: "eigen", label: "Eigen tijd" },
   ];
+  const presets: { key: Preset; label: string }[] = geselecteerdeIngeplandeSessie
+    ? [...vaste, { key: "ingepland", label: `Ingepland (${geselecteerdeIngeplandeSessie.duurMinuten} min)` }]
+    : vaste;
 
   const activePill = { background: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE", borderRadius: 8 };
   const inactivePill = { background: "#FFFFFF", color: "#64748B", border: "1px solid #E8ECF0", borderRadius: 8 };
@@ -139,7 +171,10 @@ function GoalModal({ vakken, onStart, onClose }: GoalModalProps) {
     let focusDuur: number, pauzeDuur: number;
     if (preset === "25_5") { focusDuur = 25 * 60; pauzeDuur = 5 * 60; }
     else if (preset === "50_10") { focusDuur = 50 * 60; pauzeDuur = 10 * 60; }
-    else {
+    else if (preset === "ingepland" && geselecteerdeIngeplandeSessie) {
+      focusDuur = geselecteerdeIngeplandeSessie.duurMinuten * 60;
+      pauzeDuur = Math.max(5 * 60, Math.round(geselecteerdeIngeplandeSessie.duurMinuten / 5) * 60);
+    } else {
       const f = parseInt(eigenFocus, 10);
       const p = parseInt(eigenPauze, 10);
       if (isNaN(f) || f < 1 || f > 120) { setError("Focus: 1–120 minuten."); return; }
@@ -147,7 +182,7 @@ function GoalModal({ vakken, onStart, onClose }: GoalModalProps) {
       focusDuur = f * 60; pauzeDuur = p * 60;
     }
     setError("");
-    onStart({ vak: selectedVak, doel: selectedDoel, focusDuur, pauzeDuur });
+    onStart({ vak: selectedVak, doel: selectedDoel, focusDuur, pauzeDuur, agendaSessieId: geselecteerdeIngeplandeSessie?.sessieId });
   };
 
   return (
@@ -170,6 +205,49 @@ function GoalModal({ vakken, onStart, onClose }: GoalModalProps) {
       >
         <p className="font-semibold mb-1" style={{ color: "#0F172A" }}>Start Focus Sessie</p>
         <p className="text-sm mb-5" style={{ color: "#64748B" }}>Kies een doel voor deze sessie:</p>
+
+        {vandaagSessies.length > 0 && (
+          <div className="mb-4">
+            <p className="label mb-2 block">Vandaag ingepland</p>
+            <div className="space-y-1.5">
+              {vandaagSessies.map((s, i) => {
+                const isSelected = geselecteerdeIngeplandeSessie === s;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => selecteerIngeplandeSessie(s)}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-left transition-colors"
+                    style={{
+                      background: isSelected ? "#EFF6FF" : "#F8F9FC",
+                      border: `1px solid ${isSelected ? "#BFDBFE" : "#E8ECF0"}`,
+                      color: "#374151",
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLButtonElement).style.borderColor = "#CBD5E1"; }}
+                    onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLButtonElement).style.borderColor = "#E8ECF0"; }}
+                  >
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: s.kleur }} />
+                    <span className="flex-1 min-w-0">
+                      <span style={{ color: s.kleur, fontWeight: 600 }}>{s.vakNaam}</span>
+                      {s.doel && <span style={{ color: "#64748B" }}> · {s.doel}</span>}
+                    </span>
+                    <span className="text-xs flex-shrink-0 font-medium" style={{ color: "#94A3B8" }}>
+                      {s.duurMinuten} min
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {vandaagSessies.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+            <div style={{ flex: 1, height: 1, background: "#E8ECF0" }} />
+            <span style={{ fontSize: 12, color: "#94A3B8", flexShrink: 0, whiteSpace: "nowrap" }}>Of kies zelf</span>
+            <div style={{ flex: 1, height: 1, background: "#E8ECF0" }} />
+          </div>
+        )}
 
         <div className="space-y-4 mb-6">
           <div>
@@ -217,6 +295,11 @@ function GoalModal({ vakken, onStart, onClose }: GoalModalProps) {
                 </div>
               </div>
             )}
+            {preset === "ingepland" && geselecteerdeIngeplandeSessie && (
+              <p className="text-xs mt-2" style={{ color: "#16A34A" }}>
+                De duur van je ingeplande sessie wordt gebruikt als focustijd.
+              </p>
+            )}
             {error && <p className="text-xs mt-2" style={{ color: "#DC2626" }}>{error}</p>}
           </div>
         </div>
@@ -237,14 +320,33 @@ interface ZenOverlayProps {
   onClose: () => void;
   audioCtxRef: { current: AudioContext | null };
   masterGainRef: { current: GainNode | null };
+  uid: string;
+  sessies: StudieSessie[];
+  confidenceScores: Record<string, number>;
+  vakken: Vak[];
 }
 
-function ZenOverlay({ config, onClose, audioCtxRef, masterGainRef }: ZenOverlayProps) {
+function ZenOverlay({ config, onClose, audioCtxRef, masterGainRef, uid, sessies, confidenceScores, vakken }: ZenOverlayProps) {
   const { vak, doel, focusDuur, pauzeDuur } = config;
-  const { fase, seconds, running, setRunning, sessies, reset, skipPauze } = useZenTimer(focusDuur, pauzeDuur);
+  const { fase, seconds, running, setRunning, sessies: timerSessies, reset, skipPauze, extendFocus } = useZenTimer(focusDuur, pauzeDuur);
   const [geluid, setGeluid] = useState<Geluid>("stilte");
   const [volume, setVolume] = useState(50);
   const [ademOpen, setAdemOpen] = useState(false);
+
+  const { markeerVoltooid, update } = useAgenda(uid);
+  const { resterend: herplanResterend, checkEnVerhoog } = useHerplanLimiet(uid);
+
+  const [showCheckIn, setShowCheckIn] = useState(false);
+  const [herplanningData, setHerplanningData] = useState<{
+    uitgelopenSessieId: string;
+    extraMinuten: number;
+    huidigBlok: StudieSessie[];
+    blokEindtijd: string;
+  } | null>(null);
+
+  const agendaSessie = config.agendaSessieId
+    ? (sessies.find(s => s.id === config.agendaSessieId) ?? null)
+    : null;
 
   // Flash on phase switch
   const prevFaseRef = useRef(fase);
@@ -258,6 +360,16 @@ function ZenOverlay({ config, onClose, audioCtxRef, masterGainRef }: ZenOverlayP
       return () => clearTimeout(t);
     }
   }, [fase]);
+
+  // Detect focus→pauze transition for check-in
+  const checkInFaseRef = useRef<"focus" | "pauze">("focus");
+  useEffect(() => {
+    if (fase === "pauze" && checkInFaseRef.current === "focus" && config.agendaSessieId) {
+      setRunning(false);
+      setShowCheckIn(true);
+    }
+    checkInFaseRef.current = fase;
+  }, [fase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Audio — session-local refs (brownSource, lofiStop stay in this component)
   const brownSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -368,6 +480,21 @@ function ZenOverlay({ config, onClose, audioCtxRef, masterGainRef }: ZenOverlayP
         style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
       />
 
+      {/* Naar vak */}
+      {vak.id && (
+        <button
+          onClick={() => window.open(`/vak/${vak.id}`, "_blank")}
+          className="absolute top-6 left-6 text-sm px-4 py-2 rounded-xl transition-colors flex items-center gap-2"
+          style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.6)" }}
+        >
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          Naar vak
+        </button>
+      )}
+
       {/* Close */}
       <button onClick={onClose} className="absolute top-6 right-6 text-sm px-4 py-2 rounded-xl transition-colors"
         style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.6)" }}>
@@ -407,10 +534,10 @@ function ZenOverlay({ config, onClose, audioCtxRef, masterGainRef }: ZenOverlayP
         <div className="flex items-center justify-center gap-2 mb-8">
           {Array.from({ length: 4 }).map((_, i) => (
             <span key={i} className="w-2.5 h-2.5 rounded-full transition-colors duration-300"
-              style={{ background: i < (sessies % 4) ? "#2563EB" : "rgba(255,255,255,0.15)" }} />
+              style={{ background: i < (timerSessies % 4) ? "#2563EB" : "rgba(255,255,255,0.15)" }} />
           ))}
           <span className="text-xs ml-2" style={{ color: "rgba(255,255,255,0.4)" }}>
-            Sessie {sessies + 1}
+            Sessie {timerSessies + 1}
           </span>
         </div>
 
@@ -472,11 +599,60 @@ function ZenOverlay({ config, onClose, audioCtxRef, masterGainRef }: ZenOverlayP
 
         {/* Stats */}
         <p className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>
-          Vandaag: {sessies} {sessies === 1 ? "sessie" : "sessies"} · {sessies * focusMin} min gefocust
+          Vandaag: {timerSessies} {timerSessies === 1 ? "sessie" : "sessies"} · {timerSessies * focusMin} min gefocust
         </p>
       </div>
 
       {ademOpen && <AdemhalingOefening onClose={() => setAdemOpen(false)} />}
+
+      {showCheckIn && (
+        <TimerCheckIn
+          sessie={agendaSessie}
+          vak={config.vak}
+          onKlaar={() => {
+            if (config.agendaSessieId) markeerVoltooid(config.agendaSessieId, true);
+            setShowCheckIn(false);
+            setRunning(true);
+          }}
+          onPauze={() => {
+            setShowCheckIn(false);
+            setRunning(true);
+          }}
+          onMeerTijd={(extraMinuten) => {
+            setShowCheckIn(false);
+            if (config.agendaSessieId) {
+              const _now = new Date();
+              const todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+              const vandaagSessies = sessies.filter(s => s.datum === todayStr);
+              const huidigBlok = getHuidigBlok(vandaagSessies, config.agendaSessieId!);
+              const blokEindtijd = getBlokEindtijd(huidigBlok);
+              setHerplanningData({ uitgelopenSessieId: config.agendaSessieId!, extraMinuten, huidigBlok, blokEindtijd });
+            }
+            extendFocus(extraMinuten * 60);
+          }}
+        />
+      )}
+
+      {herplanningData && (
+        <HerplanningPreview
+          uitgelopenSessieId={herplanningData.uitgelopenSessieId}
+          extraMinuten={herplanningData.extraMinuten}
+          huidigBlok={herplanningData.huidigBlok}
+          blokEindtijd={herplanningData.blokEindtijd}
+          vakken={vakken}
+          confidenceScores={confidenceScores}
+          herplanResterend={herplanResterend}
+          onBevestig={async (nieuwePlannen) => {
+            const toegestaan = await checkEnVerhoog();
+            if (!toegestaan) return;
+            for (const sessie of nieuwePlannen) {
+              await update(sessie.id, { startTijd: sessie.startTijd, duurMinuten: sessie.duurMinuten });
+            }
+            setHerplanningData(null);
+          }}
+          onAnnuleer={() => setHerplanningData(null)}
+        />
+      )}
     </div>
   );
 }
@@ -488,9 +664,13 @@ interface ZenSuiteProps {
   vakken: Vak[];
   niveau: Onderwijsniveau;
   profiel: Profiel;
+  vandaagSessies?: VandaagSessie[];
+  uid: string;
+  sessies?: StudieSessie[];
+  confidenceScores?: Record<string, number>;
 }
 
-export default function ZenSuite({ onClose, vakken, niveau, profiel }: ZenSuiteProps) {
+export default function ZenSuite({ onClose, vakken, niveau, profiel, vandaagSessies, uid, sessies = [], confidenceScores = {} }: ZenSuiteProps) {
   const [fase, setFase] = useState<"goal" | "zen">("goal");
   const [config, setConfig] = useState<ZenConfig | null>(null);
   // Lifted so refs survive the GoalModal → ZenOverlay mount transition
@@ -504,6 +684,7 @@ export default function ZenSuite({ onClose, vakken, niveau, profiel }: ZenSuiteP
           vakken={vakken}
           niveau={niveau}
           profiel={profiel}
+          vandaagSessies={vandaagSessies}
           onClose={onClose}
           onStart={(cfg) => {
             setConfig(cfg);
@@ -517,6 +698,10 @@ export default function ZenSuite({ onClose, vakken, niveau, profiel }: ZenSuiteP
           onClose={onClose}
           audioCtxRef={audioCtxRef}
           masterGainRef={masterGainRef}
+          uid={uid}
+          sessies={sessies}
+          confidenceScores={confidenceScores}
+          vakken={vakken}
         />
       )}
     </Portal>

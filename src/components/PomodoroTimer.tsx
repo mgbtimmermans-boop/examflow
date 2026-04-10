@@ -20,33 +20,100 @@ export default function PomodoroTimer({ visible, onClose }: Props) {
   const [timeLeft, setTimeLeft] = useState(PRESETS[0].focus);
   const [running, setRunning] = useState(false);
   const [sessions, setSessions] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Date.now()-based: loopt door bij tabblad-wissels
+  const startRef          = useRef<number | null>(null);
+  const elapsedAtPauseRef = useRef<number>(0);
+  const phaseRef          = useRef<"focus" | "break">("focus");
+  const phaseDurRef       = useRef<number>(PRESETS[0].focus);
+  const presetRef         = useRef<number>(0);
 
   const total = phase === "focus" ? PRESETS[preset].focus : PRESETS[preset].brk;
   const progress = (timeLeft / total) * CIRCUMFERENCE;
   const strokeColor = phase === "focus" ? "#2563EB" : "#16A34A";
 
-  useEffect(() => {
-    if (running) {
-      intervalRef.current = setInterval(() => {
-        setTimeLeft(t => {
-          if (t <= 1) {
-            setRunning(false);
-            if (phase === "focus") setSessions(s => s + 1);
-            setPhase(p => { const next = p === "focus" ? "break" : "focus"; setTimeLeft(next === "focus" ? PRESETS[preset].focus : PRESETS[preset].brk); return next; });
-            return 0;
-          }
-          return t - 1;
-        });
-      }, 1000);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [running, phase, preset]);
+  function switchPhase() {
+    const next = phaseRef.current === "focus" ? "break" : "focus";
+    const dur = next === "focus" ? PRESETS[presetRef.current].focus : PRESETS[presetRef.current].brk;
+    if (phaseRef.current === "focus") setSessions(s => s + 1);
+    phaseRef.current = next;
+    phaseDurRef.current = dur;
+    startRef.current = Date.now();
+    elapsedAtPauseRef.current = 0;
+    setPhase(next);
+    setTimeLeft(dur);
+    setRunning(false); // wacht op user om nieuwe fase te starten
+  }
 
-  const reset = () => { setRunning(false); setTimeLeft(phase === "focus" ? PRESETS[preset].focus : PRESETS[preset].brk); };
-  const changePreset = (i: number) => { setPreset(i); setRunning(false); setPhase("focus"); setTimeLeft(PRESETS[i].focus); };
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
+
+  useEffect(() => {
+    presetRef.current = preset;
+    phaseDurRef.current = phase === "focus" ? PRESETS[preset].focus : PRESETS[preset].brk;
+  }, [preset, phase]);
+
+  useEffect(() => {
+    if (!running) {
+      if (startRef.current !== null) {
+        elapsedAtPauseRef.current = Math.min(
+          Math.floor((Date.now() - startRef.current) / 1000),
+          phaseDurRef.current,
+        );
+      }
+      return;
+    }
+
+    startRef.current = Date.now() - elapsedAtPauseRef.current * 1000;
+
+    const id = setInterval(() => {
+      if (startRef.current === null) return;
+      const elapsed = Math.floor((Date.now() - startRef.current) / 1000);
+      const remaining = phaseDurRef.current - elapsed;
+      if (remaining <= 0) {
+        switchPhase();
+      } else {
+        setTimeLeft(remaining);
+      }
+    }, 500);
+
+    return () => clearInterval(id);
+  }, [running]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Herstel weergave zodra tabblad weer actief is
+  useEffect(() => {
+    function handle() {
+      if (document.visibilityState !== "visible" || !running || startRef.current === null) return;
+      const elapsed = Math.floor((Date.now() - startRef.current) / 1000);
+      const remaining = phaseDurRef.current - elapsed;
+      if (remaining <= 0) {
+        switchPhase();
+      } else {
+        setTimeLeft(remaining);
+      }
+    }
+    document.addEventListener("visibilitychange", handle);
+    return () => document.removeEventListener("visibilitychange", handle);
+  }, [running]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const reset = () => {
+    setRunning(false);
+    elapsedAtPauseRef.current = 0;
+    startRef.current = null;
+    setTimeLeft(phase === "focus" ? PRESETS[preset].focus : PRESETS[preset].brk);
+  };
+  const changePreset = (i: number) => {
+    setPreset(i);
+    setRunning(false);
+    setPhase("focus");
+    phaseRef.current = "focus";
+    presetRef.current = i;
+    phaseDurRef.current = PRESETS[i].focus;
+    elapsedAtPauseRef.current = 0;
+    startRef.current = null;
+    setTimeLeft(PRESETS[i].focus);
+  };
   const mm = String(Math.floor(timeLeft / 60)).padStart(2, "0");
   const ss = String(timeLeft % 60).padStart(2, "0");
 

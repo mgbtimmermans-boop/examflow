@@ -8,6 +8,11 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 export const metadata: Metadata = {
   title: "ExamFlow",
   description: "Jouw persoonlijke examenplanner",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
 };
 
 export const viewport: Viewport = {

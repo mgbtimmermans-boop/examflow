@@ -24,20 +24,55 @@ export default function ExamenSimulator({ vaknaam, datum, startTijd, examDuur, o
   const [timeLeft, setTimeLeft] = useState(totalSeconds);
   const [running, setRunning] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Date.now()-based: timer loopt door bij tabblad-wissels
+  const startRef         = useRef<number | null>(null); // ms timestamp (adjusted)
+  const elapsedAtPauseRef = useRef<number>(0);          // seconds elapsed when paused
+  const totalRef          = useRef(totalSeconds);
 
   useEffect(() => {
-    if (running) {
-      intervalRef.current = setInterval(() => {
-        setTimeLeft((t) => {
-          if (t <= 1) { setRunning(false); return 0; }
-          return t - 1;
-        });
-      }, 1000);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+    if (!running) {
+      if (startRef.current !== null) {
+        elapsedAtPauseRef.current = Math.min(
+          Math.floor((Date.now() - startRef.current) / 1000),
+          totalRef.current,
+        );
+      }
+      return;
     }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+
+    startRef.current = Date.now() - elapsedAtPauseRef.current * 1000;
+
+    const id = setInterval(() => {
+      if (startRef.current === null) return;
+      const elapsed = Math.floor((Date.now() - startRef.current) / 1000);
+      const remaining = totalRef.current - elapsed;
+      if (remaining <= 0) {
+        setTimeLeft(0);
+        setRunning(false);
+      } else {
+        setTimeLeft(remaining);
+      }
+    }, 500);
+
+    return () => clearInterval(id);
+  }, [running]);
+
+  // Herstel weergave zodra tabblad weer actief is
+  useEffect(() => {
+    function handle() {
+      if (document.visibilityState !== "visible" || !running || startRef.current === null) return;
+      const elapsed = Math.floor((Date.now() - startRef.current) / 1000);
+      const remaining = totalRef.current - elapsed;
+      if (remaining <= 0) {
+        setTimeLeft(0);
+        setRunning(false);
+      } else {
+        setTimeLeft(remaining);
+      }
+    }
+    document.addEventListener("visibilitychange", handle);
+    return () => document.removeEventListener("visibilitychange", handle);
   }, [running]);
 
   const hh = String(Math.floor(timeLeft / 3600)).padStart(2, "0");

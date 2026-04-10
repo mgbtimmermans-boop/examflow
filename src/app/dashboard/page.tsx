@@ -1,38 +1,94 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useInstellingen } from "@/hooks/useVakData";
 import { ALLE_VAKKEN } from "@/data/vakken";
 import { VakData, Vak, Onderwijsniveau } from "@/types";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { Portal } from "@/components/Portal";
 import VakKaart from "@/components/VakKaart";
 import GlobalProgress from "@/components/GlobalProgress";
 import Countdown from "@/components/Countdown";
 import ZenSuite from "@/components/ZenSuite";
-import DailyReview from "@/components/DailyReview";
+import { useHerhaling } from "@/hooks/useHerhaling";
 import OnboardingModal from "@/components/OnboardingModal";
 import MobileMenu from "@/components/MobileMenu";
-import Logo from "@/components/Logo";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { greeting, profielLabel } from "@/lib/helpers";
-import { DagelijkseCheckIn } from "@/components/BioSync";
 import AdemhalingOefening from "@/components/AdemhalingOefening";
+import { useAgenda } from "@/hooks/useAgenda";
+import { StudieSessie } from "@/types/agenda";
+import IntroTour from "@/components/IntroTour";
+import Navbar from "@/components/Navbar";
 
 export default function Dashboard() {
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
   const { instellingen, loading: instLoading, saveInstellingen } = useInstellingen();
+  const { sessies, sessiesOpDatum, loading: agendaLoading } = useAgenda(user?.uid ?? "");
+  const { todayItems: herhalingVandaag } = useHerhaling(user?.uid ?? "");
   const [allData, setAllData] = useState<Record<string, VakData>>({});
+  const [syllabusChecks, setSyllabusChecks] = useState<Record<string, Record<string, boolean>>>({});
   const [dataLoading, setDataLoading] = useState(true);
   const [zenOpen, setZenOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showSeCijferPopup, setShowSeCijferPopup] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [ademOpen, setAdemOpen] = useState(false);
+  const [tourActief, setTourActief] = useState(false);
+  const [hasSeenTour, setHasSeenTour] = useState<boolean | null>(null);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { if (!loading && !user) router.replace("/"); }, [user, loading, router]);
+
+  // Lees hasSeenTour uit een apart document zodat saveInstellingen (profiel) het nooit overschrijft
+  useEffect(() => {
+    if (!user || !db) return;
+    getDoc(doc(db, "users", user.uid, "instellingen", "algemeen")).then(snap => {
+      const data = snap.data();
+      if (process.env.NODE_ENV === "development") {
+        // eslint-disable-next-line no-console
+        console.log("[tour debug] instellingen/algemeen:", data);
+        // eslint-disable-next-line no-console
+        console.log("[tour debug] hasSeenTour:", data?.hasSeenTour);
+      }
+      setHasSeenTour(data?.hasSeenTour === true);
+    });
+  }, [user]);
+
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    }
+    if (showProfileMenu) document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [showProfileMenu]);
+
+  // Start tour na onboarding — gebruik apart geladen hasSeenTour (niet uit useInstellingen)
+  // zodat saveInstellingen (schrijft naar profiel) dit nooit kan overschrijven
+  useEffect(() => {
+    if (instellingen?.hasCompletedOnboarding && hasSeenTour === false) {
+      setTourActief(true);
+    }
+  }, [instellingen?.hasCompletedOnboarding, hasSeenTour]);
+
+  // Toon SE cijfer banner als nog niet ingevuld en nog niet gezien
+  useEffect(() => {
+    if (
+      instellingen?.hasCompletedOnboarding &&
+      !instellingen.hasFilledSeCijfers &&
+      !instellingen.hasSeenSeCijferPopup
+    ) {
+      const timer = setTimeout(() => setShowSeCijferPopup(true), 30 * 60 * 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [instellingen]);
 
   const gekozenIds = instellingen?.gekozenVakken ?? [];
   const gekozenVakken: Vak[] = ALLE_VAKKEN.filter(v => gekozenIds.includes(v.id));
@@ -58,8 +114,75 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, instLoading, gekozenIdsKey]);
 
+  // Realtime syllabus voortgang via onSnapshot
+  useEffect(() => {
+    if (!user || !db || instLoading || gekozenIds.length === 0) return;
+    const unsubs = gekozenIds.map(vakId => {
+      const ref = doc(db!, "users", user.uid, "syllabusVoortgang", vakId);
+      return onSnapshot(ref, snap => {
+        const checks = (snap.data()?.checks ?? {}) as Record<string, boolean>;
+        setSyllabusChecks(prev => ({ ...prev, [vakId]: checks }));
+      });
+    });
+    return () => unsubs.forEach(u => u());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, instLoading, gekozenIdsKey]);
+
   if (loading || instLoading) return null;
   if (!user) return null;
+
+  // Use local date components — toISOString() returns UTC and can give wrong date at midnight CET/CEST
+  const _now = new Date();
+  const todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+
+  // DEBUG — open browser console to see what Firestore returned for today
+  // Remove this block once Firestore data is verified clean
+  if (process.env.NODE_ENV === "development") {
+    // eslint-disable-next-line no-console
+    console.log("[agenda debug] sessies vandaag:", sessiesOpDatum(todayStr));
+  }
+
+  // Strict filter: correct date string + known vak + positive duration
+  const gekozenVakIds = new Set(gekozenVakken.map(v => v.id));
+  const vandaagSessies = sessiesOpDatum(todayStr).filter(s =>
+    typeof s.datum === "string" &&
+    s.datum === todayStr &&
+    typeof s.vakId === "string" &&
+    gekozenVakIds.has(s.vakId) &&
+    typeof s.duurMinuten === "number" &&
+    s.duurMinuten > 0
+  );
+  const zenVandaagSessies = vandaagSessies
+    .filter(s => s.syllabusItem !== null)
+    .map(s => {
+      const vak = gekozenVakken.find(v => v.id === s.vakId);
+      return {
+        sessieId: s.id,
+        vakId: s.vakId,
+        doel: s.syllabusItem!,
+        vakNaam: vak?.naam ?? "",
+        kleur: vak?.kleur ?? "#2563EB",
+        duurMinuten: s.duurMinuten,
+      };
+    })
+    .filter(s => s.vakNaam);
+
+  // Merge allData (confidence, notes, seGrade) met syllabusVoortgang checks (realtime).
+  // BELANGRIJK: syllabusVoortgang is de enige bron van waarheid voor checks. Nooit
+  // terugvallen op base.checks uit users/{uid}/vakken/{vakId}, want daar staat bij
+  // sommige gebruikers nog stale data uit een eerdere versie (gaf bv. spookwaarde
+  // 4/70 bij Wiskunde A).
+  const mergedData: Record<string, VakData> = Object.fromEntries(
+    gekozenVakken.map(vak => {
+      const base = allData[vak.id] ?? {} as VakData;
+      const sc = syllabusChecks[vak.id] ?? {};
+      return [vak.id, { ...base, checks: sc as unknown as Record<number, boolean> }];
+    })
+  );
+
+  const confidenceScores: Record<string, number> = Object.fromEntries(
+    Object.entries(allData).map(([vakId, d]) => [vakId, (d as { confidenceScore?: number }).confidenceScore ?? 5])
+  );
 
   const displayName = user.displayName ?? user.email?.split("@")[0] ?? "daar";
   const initials = displayName.slice(0, 2).toUpperCase();
@@ -68,19 +191,70 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen" style={{ background: "#F8F9FC" }}>
-      {/* Onboarding — eerste login */}
+      {/* Onboarding */}
       {instellingen && !instellingen.hasCompletedOnboarding && (
         <OnboardingModal onComplete={saveInstellingen} />
       )}
       {!instellingen && !instLoading && (
         <OnboardingModal onComplete={saveInstellingen} />
       )}
-      {/* Onboarding — vakken aanpassen */}
       {showOnboarding && (
         <OnboardingModal
           onComplete={async (inst) => { await saveInstellingen(inst); setShowOnboarding(false); }}
           isAanpassen
           onClose={() => setShowOnboarding(false)}
+        />
+      )}
+
+      {/* SE Cijfer banner */}
+      {showSeCijferPopup && (
+        <div style={{
+          position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)",
+          zIndex: 9999, width: "calc(100% - 40px)", maxWidth: 480,
+          background: "#FFFFFF", border: "1px solid #E8ECF0",
+          borderRadius: 12, boxShadow: "0 4px 24px rgba(0,0,0,0.10)",
+          padding: "12px 16px", display: "flex", alignItems: "center", gap: 12,
+        }}>
+          <p style={{ flex: 1, fontSize: 13, color: "#374151", margin: 0, lineHeight: 1.4 }}>
+            <span style={{ fontWeight: 600 }}>Vul je SE cijfers in</span> zodat de app je planning slimmer kan prioriteren.
+          </p>
+          <button
+            onClick={() => router.push("/instellingen#cijfers")}
+            style={{
+              padding: "7px 14px", borderRadius: 8, border: "none",
+              background: "#2563EB", color: "#FFFFFF",
+              fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+            }}
+          >
+            Invullen
+          </button>
+          <button
+            onClick={async () => {
+              setShowSeCijferPopup(false);
+              if (db && user) {
+                await setDoc(
+                  doc(db, "users", user.uid, "instellingen", "profiel"),
+                  { hasSeenSeCijferPopup: true },
+                  { merge: true }
+                );
+              }
+            }}
+            style={{
+              background: "none", border: "none", cursor: "pointer",
+              color: "#94A3B8", fontSize: 18, lineHeight: 1, padding: "0 2px", flexShrink: 0,
+            }}
+            aria-label="Sluiten"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* Intro Tour */}
+      {tourActief && (
+        <IntroTour
+          uid={user.uid}
+          onVoltooid={() => setTourActief(false)}
         />
       )}
 
@@ -96,15 +270,8 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Navbar */}
-      <nav className="sticky top-0 z-40" style={{ background: "#FFFFFF", borderBottom: "1px solid #E8ECF0" }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[60px] flex items-center justify-between">
-          <div className="flex items-center gap-5">
-            <Logo size="sm" />
-            <Link href="/rooster" className="hidden md:block text-sm font-medium" style={{ color: "#64748B" }}>Rooster</Link>
-            <Link href="/biosync" className="hidden md:block text-sm font-medium" style={{ color: "#64748B" }}>Bio-Sync</Link>
-          </div>
-          <div className="flex items-center gap-3">
+      <Navbar maxWidth="max-w-7xl" px="px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center gap-3">
             {/* Desktop nav items */}
             <div className="hidden md:flex items-center gap-3">
               {niveauLabel && (
@@ -117,18 +284,82 @@ export default function Dashboard() {
                   </button>
                 </div>
               )}
-              <button onClick={() => setZenOpen(v => !v)} className="btn-secondary flex items-center gap-1.5 text-xs">
+              <button
+                data-tour="focus-knop"
+                onClick={() => setZenOpen(v => !v)}
+                className="btn-secondary flex items-center gap-1.5 text-xs"
+              >
                 <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 Focus
               </button>
-              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: "#EFF6FF" }}>
-                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold" style={{ background: "#2563EB", color: "white" }}>{initials}</span>
-                <span className="text-sm font-medium" style={{ color: "#2563EB" }}>{displayName}</span>
-              </div>
-              <button onClick={signOut} className="btn-secondary text-xs flex items-center gap-1.5">
-                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round"/><polyline points="16 17 21 12 16 7" strokeLinecap="round"/><line x1="21" y1="12" x2="9" y2="12" strokeLinecap="round"/></svg>
-                Uitloggen
+              {/* Tour herstarten */}
+              <button
+                onClick={() => setTourActief(true)}
+                title="Rondleiding opnieuw starten"
+                className="flex items-center justify-center rounded-full text-xs font-bold"
+                style={{ width: 28, height: 28, background: "#F1F5F9", color: "#64748B", border: "1px solid #E8ECF0" }}
+              >
+                ?
               </button>
+              <div ref={profileMenuRef} style={{ position: "relative" }}>
+                <button
+                  onClick={() => setShowProfileMenu(v => !v)}
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg"
+                  style={{ background: "#EFF6FF", border: "none", cursor: "pointer" }}
+                >
+                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold" style={{ background: "#2563EB", color: "white" }}>{initials}</span>
+                  <span className="text-sm font-medium" style={{ color: "#2563EB" }}>{displayName}</span>
+                  <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="#2563EB" strokeWidth="2.5"><polyline points="6 9 12 15 18 9" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
+                {showProfileMenu && (
+                  <div style={{
+                    position: "absolute", top: "calc(100% + 8px)", right: 0,
+                    background: "#FFFFFF", border: "1px solid #E8ECF0",
+                    borderRadius: 12, boxShadow: "0 4px 24px rgba(0,0,0,0.08)",
+                    minWidth: 200, zIndex: 100, overflow: "hidden",
+                  }}>
+                    <div style={{ padding: "14px 16px", borderBottom: "1px solid #F1F5F9" }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#0F172A" }}>{displayName}</div>
+                      <div style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>{user?.email}</div>
+                      <div style={{ fontSize: 11, color: "#64748B", marginTop: 4 }}>{niveauLabel}{profielLbl && profielLbl !== "MAVO" ? ` · ${profielLbl}` : ""}</div>
+                    </div>
+                    <div style={{ borderBottom: "1px solid #F1F5F9" }}>
+                      {[
+                        { label: "Mijn profiel", href: "/instellingen#profiel" },
+                        { label: "Cijfers & doelen", href: "/instellingen#cijfers" },
+                        { label: "Planning voorkeuren", href: "/instellingen#planning" },
+                      ].map(item => (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => setShowProfileMenu(false)}
+                          className="block"
+                          style={{
+                            padding: "10px 16px", fontSize: 14, color: "#374151",
+                            textDecoration: "none", display: "block",
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.background = "#F8F9FC")}
+                          onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                        >
+                          {item.label}
+                        </Link>
+                      ))}
+                    </div>
+                    <button
+                      onClick={signOut}
+                      style={{
+                        width: "100%", padding: "10px 16px",
+                        fontSize: 14, color: "#DC2626",
+                        background: "none", border: "none", cursor: "pointer", textAlign: "left",
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "#F8F9FC")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "none")}
+                    >
+                      Uitloggen
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Mobile hamburger */}
@@ -145,8 +376,7 @@ export default function Dashboard() {
               </svg>
             </button>
           </div>
-        </div>
-      </nav>
+      </Navbar>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Hero */}
@@ -157,17 +387,102 @@ export default function Dashboard() {
               <p className="text-sm mb-5" style={{ color: "#64748B" }}>
                 Jouw {niveauLabel} examens{profielLbl && profielLbl !== "MAVO" ? ` · ${profielLbl}` : ""}
               </p>
-              <GlobalProgress vakken={gekozenVakken} allData={allData} />
+              <div data-tour="global-progress">
+                <GlobalProgress vakken={gekozenVakken} allData={mergedData} />
+              </div>
             </div>
             <Countdown firstExamDate={firstExamDate} />
           </div>
         </motion.div>
 
-        {/* Daily Check-in */}
-        {user && <DagelijkseCheckIn uid={user.uid} />}
+        {/* Bio-Sync banner — examen binnen 3 dagen */}
+        {(() => {
+          const today = new Date(); today.setHours(0, 0, 0, 0);
+          const binnenDrie = ceVakken.find(v => {
+            if (!v.examDatum) return false;
+            const exam = new Date(v.examDatum + "T00:00:00");
+            const days = Math.round((exam.getTime() - today.getTime()) / 86400000);
+            return days >= 0 && days <= 3;
+          });
+          if (!binnenDrie) return null;
+          const exam = new Date(binnenDrie.examDatum! + "T00:00:00");
+          const daysLeft = Math.round((exam.getTime() - today.getTime()) / 86400000);
+          const wektijd = instellingen?.wektijd ?? "07:30";
+          const [wu, wm] = wektijd.split(":").map(Number);
+          const wekMin = wu * 60 + (wm ?? 0);
+          const bedtijdMin = ((wekMin - 5 * 90 - 15) % (24 * 60) + 24 * 60) % (24 * 60);
+          const bedtijd = `${String(Math.floor(bedtijdMin / 60)).padStart(2, "0")}:${String(bedtijdMin % 60).padStart(2, "0")}`;
+          return (
+            <div
+              className="mb-6 flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer"
+              style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}
+              onClick={() => router.push("/biosync")}
+            >
+              <p style={{ fontSize: 13, color: "#D97706", lineHeight: 1.5 }}>
+                🌙 <span style={{ fontWeight: 600 }}>{binnenDrie.naam}</span> is over {daysLeft === 0 ? "vandaag" : daysLeft === 1 ? "morgen" : `${daysLeft} dagen`}.
+                {" "}Slaap vanavond om <span style={{ fontWeight: 600 }}>{bedtijd}</span> voor optimale voorbereiding.
+              </p>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#D97706", whiteSpace: "nowrap", flexShrink: 0 }}>
+                Bio-Sync →
+              </span>
+            </div>
+          );
+        })()}
 
-        {/* Daily Review */}
-        {user && <DailyReview uid={user.uid} />}
+        {/* Herhalen banner */}
+        {herhalingVandaag.length > 0 && (
+          <div
+            onClick={() => router.push("/herhalen")}
+            className="mb-6 cursor-pointer flex items-center justify-between"
+            style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 10, padding: "12px 16px" }}
+          >
+            <span className="text-sm font-medium" style={{ color: "#2563EB" }}>
+              Je hebt {herhalingVandaag.length} leerdoel{herhalingVandaag.length !== 1 ? "en" : ""} te herhalen vandaag
+            </span>
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#2563EB" strokeWidth="2">
+              <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+        )}
+
+        {/* Vandaag widget — alleen tonen als Firestore klaar is én er sessies zijn */}
+        {!agendaLoading && vandaagSessies.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+            className="card mb-6 cursor-pointer"
+            onClick={() => router.push("/agenda")}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <p className="label">Vandaag ingepland</p>
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full"
+                style={{ background: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE" }}>
+                {vandaagSessies.length} sessie{vandaagSessies.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+            <div className="space-y-2">
+              {vandaagSessies
+                .sort((a, b) => a.startTijd.localeCompare(b.startTijd))
+                .map(s => {
+                  const vak = gekozenVakken.find(v => v.id === s.vakId);
+                  const onderwerp = s.syllabusItem ?? s.eigenTitel ?? "Eigen onderwerp";
+                  return (
+                    <div key={s.id} className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ background: vak?.kleur ?? "#2563EB" }} />
+                      <span className="text-sm flex-1" style={{ color: "#374151" }}>
+                        {vak?.naam ?? ""} · {onderwerp}
+                      </span>
+                      <span className="text-xs" style={{ color: "#94A3B8" }}>
+                        {s.startTijd} · {s.duurMinuten} min
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          </motion.div>
+        )}
 
         {/* Ademhaling */}
         <div className="mb-6">
@@ -186,7 +501,7 @@ export default function Dashboard() {
         {/* CE Vakken */}
         <div className="flex items-center justify-between mb-4">
           <p className="label">Jouw vakken</p>
-          <p className="text-xs" style={{ color: "#94A3B8" }}>Gesorteerd op datum ↓</p>
+          <p className="text-xs" style={{ color: "#94A3B8" }}>Gesorteerd op datum</p>
         </div>
 
         {dataLoading ? (
@@ -198,9 +513,9 @@ export default function Dashboard() {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div data-tour="vakken-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {ceVakken.map((vak, i) => (
-              <VakKaart key={vak.id} vak={vak} userData={allData[vak.id]} index={i} />
+              <VakKaart key={vak.id} vak={vak} userData={mergedData[vak.id]} index={i} />
             ))}
           </div>
         )}
@@ -211,7 +526,7 @@ export default function Dashboard() {
             <p className="label mb-4">Schoolexamens</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {schoolVakken.map((vak, i) => (
-                <VakKaart key={vak.id} vak={vak} userData={allData[vak.id]} index={i} />
+                <VakKaart key={vak.id} vak={vak} userData={mergedData[vak.id]} index={i} />
               ))}
             </div>
           </div>
@@ -241,6 +556,10 @@ export default function Dashboard() {
           vakken={gekozenVakken}
           niveau={(instellingen?.niveau ?? "VWO") as Onderwijsniveau}
           profiel={instellingen?.profiel ?? "CM"}
+          vandaagSessies={zenVandaagSessies}
+          uid={user.uid}
+          sessies={vandaagSessies as StudieSessie[]}
+          confidenceScores={confidenceScores}
           onClose={() => setZenOpen(false)}
         />
       )}

@@ -1,49 +1,109 @@
 "use client";
+import Link from "next/link";
+import { wegingLabel } from "@/lib/helpers";
 import { Onderwijsniveau } from "@/types";
-import { calcCE, wegingLabel, doelcijfers } from "@/lib/helpers";
 
 interface Props {
-  seGrade: string;
-  onSeGradeChange: (v: string) => void;
+  seCijfer: number | null;
+  streefCijfer?: number | null;
   niveau: Onderwijsniveau;
 }
 
-function ResultRow({ label, ce }: { label: string; ce: number }) {
-  let msg = `${ce.toFixed(1)}`;
-  let color = "#0F172A";
-  let note = "";
-  if (ce < 1) { msg = "—"; note = "Je haalt het al!"; color = "#16A34A"; }
-  else if (ce > 10) { msg = "—"; note = "Niet haalbaar"; color = "#DC2626"; }
-  return (
-    <div className="flex justify-between items-center py-2" style={{ borderBottom: "1px solid #F1F5F9" }}>
-      <span className="text-sm" style={{ color: "#64748B" }}>{label}</span>
-      {note ? <span className="text-sm font-semibold" style={{ color }}>{note}</span>
-             : <span className="text-sm font-semibold" style={{ color }}>CE nodig: {msg}</span>}
-    </div>
-  );
-}
+const DOELEN = [5.5, 6.0, 7.0, 8.0];
 
-export default function GradePredictor({ seGrade, onSeGradeChange, niveau }: Props) {
-  const se = parseFloat(seGrade);
-  const valid = !isNaN(se) && se >= 1 && se <= 10;
-  const doelen = doelcijfers(niveau);
-
+export default function GradePredictor({ seCijfer, streefCijfer, niveau }: Props) {
   return (
     <div className="card">
-      <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "#64748B" }}>Cijferberekening</p>
-      <p className="text-xs mb-3" style={{ color: "#94A3B8" }}>{wegingLabel(niveau)}</p>
-      <div className="mb-3">
-        <label className="block text-sm font-medium mb-1.5" style={{ color: "#374151" }}>Mijn SE-cijfer</label>
-        <input type="number" min="1" max="10" step="0.1" value={seGrade}
-          onChange={e => onSeGradeChange(e.target.value)}
-          className="w-28 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none"
-          style={{ border: "1px solid #E8ECF0", background: "#F8F9FC", color: "#0F172A" }}
-          placeholder="6.5" />
-      </div>
-      {valid && doelen.map(d => (
-        <ResultRow key={d} label={`Voor een ${d.toFixed(1)}`} ce={calcCE(se, d, niveau)} />
-      ))}
-      {!valid && seGrade && <p className="text-xs" style={{ color: "#DC2626" }}>Voer een geldig cijfer in (1–10)</p>}
+      <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "#64748B" }}>
+        Cijferberekening
+      </p>
+      <p className="text-xs mb-4" style={{ color: "#94A3B8" }}>{wegingLabel(niveau)}</p>
+
+      {!seCijfer ? (
+        <div style={{
+          padding: "10px 12px",
+          background: "#FFFBEB",
+          borderRadius: 8,
+          border: "1px solid #FDE68A",
+          fontSize: 13,
+          color: "#92400E",
+        }}>
+          Vul je SE cijfer in via{" "}
+          <Link href="/instellingen#cijfers" style={{ color: "#2563EB", textDecoration: "underline" }}>
+            Instellingen
+          </Link>
+          {" "}voor een automatische berekening.
+        </div>
+      ) : (
+        <div>
+          <div style={{ fontSize: 13, color: "#64748B", marginBottom: 12 }}>
+            SE cijfer: <strong>{seCijfer.toFixed(1)}</strong>
+            {" · "}
+            <Link href="/instellingen#cijfers" style={{ color: "#2563EB", fontSize: 12, textDecoration: "none" }}>
+              Aanpassen
+            </Link>
+          </div>
+
+          <div style={{ fontSize: 13 }}>
+            {streefCijfer != null && (() => {
+              const ceNodig = streefCijfer * 2 - seCijfer;
+              const haalbaar = ceNodig >= 1.0 && ceNodig <= 10.0;
+              return (
+                <>
+                  <div style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "12px 0", borderBottom: "1px solid #F1F5F9",
+                  }}>
+                    <span style={{ color: "#64748B", display: "flex", alignItems: "center", gap: 6 }}>
+                      Voor een {streefCijfer.toFixed(1)}
+                      <span style={{ fontSize: 11, color: "#9CA3AF" }}>(jouw doel)</span>
+                    </span>
+                    <span style={{
+                      color: !haalbaar
+                        ? ceNodig < 1.0 ? "#16A34A" : "#DC2626"
+                        : ceNodig <= 5.5 ? "#16A34A"
+                        : ceNodig <= 7.5 ? "#D97706"
+                        : "#DC2626",
+                    }}>
+                      {!haalbaar
+                        ? ceNodig < 1.0 ? "Al gehaald ✓" : "Niet haalbaar"
+                        : `CE nodig: ${ceNodig.toFixed(1)}`}
+                    </span>
+                  </div>
+                  <div style={{ borderBottom: "2px solid #E2E8F0" }} />
+                </>
+              );
+            })()}
+
+            {DOELEN.map(doel => {
+              const ceNodig = doel * 2 - seCijfer;
+              const haalbaar = ceNodig >= 1.0 && ceNodig <= 10.0;
+
+              return (
+                <div key={doel} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "12px 0", borderBottom: "1px solid #F1F5F9",
+                }}>
+                  <span style={{ color: "#64748B" }}>
+                    Voor een {doel.toFixed(1)}
+                  </span>
+                  <span style={{
+                    color: !haalbaar
+                      ? ceNodig < 1.0 ? "#16A34A" : "#DC2626"
+                      : ceNodig <= 5.5 ? "#16A34A"
+                      : ceNodig <= 7.5 ? "#D97706"
+                      : "#DC2626",
+                  }}>
+                    {!haalbaar
+                      ? ceNodig < 1.0 ? "Al gehaald ✓" : "Niet haalbaar"
+                      : `CE nodig: ${ceNodig.toFixed(1)}`}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

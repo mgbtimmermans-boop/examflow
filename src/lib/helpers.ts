@@ -1,4 +1,5 @@
-import { Onderwijsniveau } from "@/types";
+import { Onderwijsniveau, Vak } from "@/types";
+import { SYLLABI } from "@/data/syllabi/index";
 
 export function daysUntil(examDatum: string): number {
   const today = new Date();
@@ -41,4 +42,18 @@ export function wegingLabel(_niveau: Onderwijsniveau): string {
 export function doelcijfers(niveau: Onderwijsniveau): number[] {
   if (niveau === "MAVO") return [5.5, 7.5];
   return [5.5, 8.0];
+}
+
+/** Counts all leerdoelen in the hierarchical syllabus, falls back to flat syllabus length */
+export function telLeerdoelen(vak: Vak): number {
+  const vakSyllabus = SYLLABI[vak.id];
+  if (vakSyllabus) {
+    return vakSyllabus.domeinen.flatMap(d => d.subdomeinen).flatMap(s => s.leerdoelen).length;
+  }
+  return vak.syllabus.length;
+}
+
+/** Counts checked items; works for both old numeric-key checks and new leerdoel-id checks */
+export function telAfgevinkt(_vak: Vak, checks: Record<string, boolean>): number {
+  return Object.values(checks).filter(Boolean).length;
 }

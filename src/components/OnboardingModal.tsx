@@ -52,6 +52,8 @@ export default function OnboardingModal({ onComplete, isAanpassen, onClose }: Pr
   const [niveau, setNiveau] = useState<Onderwijsniveau | null>(null);
   const [profiel, setProfiel] = useState<Profiel | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [seCijferRaw, setSeCijferRaw] = useState<Record<string, string>>({});
+  const [seErrors, setSeErrors] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
 
   const handleNiveauNext = (n: Onderwijsniveau) => {
@@ -94,14 +96,46 @@ export default function OnboardingModal({ onComplete, isAanpassen, onClose }: Pr
     });
   };
 
-  const handleFinish = async () => {
+  const handleFinish = async (skip?: boolean) => {
     if (!niveau || !profiel) return;
+
+    if (skip) {
+      setSaving(true);
+      await onComplete({
+        niveau, profiel,
+        gekozenVakken: Array.from(selected),
+        hasCompletedOnboarding: true,
+        hasFilledSeCijfers: false,
+        seCijfers: {},
+      });
+      return;
+    }
+
+    const parsed: Record<string, number> = {};
+    const errors: Record<string, boolean> = {};
+    let hasError = false;
+
+    for (const [id, val] of Object.entries(seCijferRaw)) {
+      if (!val.trim()) continue;
+      const n = parseFloat(val);
+      if (isNaN(n) || n < 1.0 || n > 10.0) {
+        errors[id] = true;
+        hasError = true;
+      } else {
+        parsed[id] = n;
+      }
+    }
+
+    setSeErrors(errors);
+    if (hasError) return;
+
     setSaving(true);
     await onComplete({
-      niveau,
-      profiel,
+      niveau, profiel,
       gekozenVakken: Array.from(selected),
       hasCompletedOnboarding: true,
+      hasFilledSeCijfers: Object.keys(parsed).length > 0,
+      seCijfers: parsed,
     });
   };
 
@@ -121,37 +155,47 @@ export default function OnboardingModal({ onComplete, isAanpassen, onClose }: Pr
           style={{ background: "#FFFFFF", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", maxHeight: "95vh" }}
         >
           {/* Header */}
-          <div className="px-6 pt-6 pb-4 border-b" style={{ borderColor: "#E8ECF0", position: "relative" }}>
-            {isAanpassen && onClose && (
-              <button
-                onClick={onClose}
-                style={{
-                  position: "absolute",
-                  top: 16, right: 16,
-                  width: 44, height: 44,
-                  borderRadius: "50%",
-                  border: "1px solid #E8ECF0",
-                  background: "#FFFFFF",
-                  color: "#64748B",
-                  fontSize: 18,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  lineHeight: 1,
-                }}
-                aria-label="Sluiten"
-              >
-                ×
-              </button>
-            )}
-            <div className="flex items-center gap-2 mb-1">
-              {[1,2,3].map(i => (
-                <div key={i} className="h-1.5 flex-1 rounded-full transition-colors"
-                  style={{ background: i <= step ? "#2563EB" : "#E8ECF0" }} />
-              ))}
+          <div className="px-6 pt-6 pb-4 border-b" style={{ borderColor: "#E8ECF0" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+              {/* Voortgang */}
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                  {[1,2,3,4].map(i => (
+                    <div key={i} style={{
+                      flex: 1, height: 4, borderRadius: 99,
+                      background: i <= step ? "#2563EB" : "#E8ECF0",
+                      transition: "background 0.2s",
+                    }} />
+                  ))}
+                </div>
+                <span style={{ fontSize: 13, color: "#94A3B8" }}>
+                  Stap {step} van {niveau === "MAVO" ? 3 : 4}
+                </span>
+              </div>
+
+              {/* Sluit knop */}
+              {isAanpassen && onClose && (
+                <button
+                  onClick={onClose}
+                  aria-label="Sluiten"
+                  style={{
+                    width: 32, height: 32,
+                    borderRadius: "50%",
+                    border: "1px solid #E8ECF0",
+                    background: "#FFFFFF",
+                    color: "#94A3B8",
+                    fontSize: 16,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  ×
+                </button>
+              )}
             </div>
-            <p className="text-xs mt-2" style={{ color: "#94A3B8" }}>Stap {step} van {niveau === "MAVO" ? 2 : 3}</p>
           </div>
 
           <div className="p-6">
@@ -160,17 +204,54 @@ export default function OnboardingModal({ onComplete, isAanpassen, onClose }: Pr
                 <h2 className="text-xl font-semibold mb-1" style={{ color: "#0F172A" }}>Welkom bij ExamFlow!</h2>
                 <p className="text-sm mb-6" style={{ color: "#64748B" }}>Kies je onderwijsniveau om te beginnen.</p>
                 <div className="space-y-3">
-                  {(["VWO","HAVO","MAVO"] as Onderwijsniveau[]).map(n => (
-                    <button key={n} onClick={() => handleNiveauNext(n)}
-                      className="w-full text-left p-4 rounded-xl border-2 transition-all"
-                      style={{ borderColor: "#E8ECF0", background: "#FAFAFA", minHeight: 64 }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "#2563EB"; (e.currentTarget as HTMLElement).style.background = "#EFF6FF"; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "#E8ECF0"; (e.currentTarget as HTMLElement).style.background = "#FAFAFA"; }}
-                    >
-                      <p className="font-semibold" style={{ color: "#0F172A" }}>{n}{n === "MAVO" ? " (VMBO-TL)" : ""}</p>
-                      <p className="text-sm" style={{ color: "#64748B" }}>{NIVEAU_INFO[n].sub}</p>
-                    </button>
-                  ))}
+                  {(["VWO","HAVO","MAVO"] as Onderwijsniveau[]).map(n => {
+                    const isMavo = n === "MAVO"
+                    return (
+                      <button key={n}
+                        onClick={() => !isMavo && handleNiveauNext(n)}
+                        disabled={isMavo}
+                        className="w-full text-left p-4 rounded-xl border-2 transition-all"
+                        style={{
+                          borderColor: isMavo ? "#E8ECF0" : "#E8ECF0",
+                          background: isMavo ? "#F8F9FC" : "#FAFAFA",
+                          cursor: isMavo ? "not-allowed" : "pointer",
+                          opacity: isMavo ? 0.6 : 1,
+                          position: "relative",
+                        }}
+                        onMouseEnter={e => {
+                          if (!isMavo) {
+                            ;(e.currentTarget as HTMLElement).style.borderColor = "#2563EB"
+                            ;(e.currentTarget as HTMLElement).style.background = "#EFF6FF"
+                          }
+                        }}
+                        onMouseLeave={e => {
+                          if (!isMavo) {
+                            ;(e.currentTarget as HTMLElement).style.borderColor = "#E8ECF0"
+                            ;(e.currentTarget as HTMLElement).style.background = "#FAFAFA"
+                          }
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <div>
+                            <p className="font-semibold" style={{ color: isMavo ? "#94A3B8" : "#0F172A" }}>
+                              {n}{n === "MAVO" ? " (VMBO-TL)" : ""}
+                            </p>
+                            <p className="text-sm" style={{ color: "#94A3B8" }}>{NIVEAU_INFO[n].sub}</p>
+                          </div>
+                          {isMavo && (
+                            <span style={{
+                              fontSize: 11, fontWeight: 500,
+                              background: "#FEF3C7", color: "#92400E",
+                              padding: "3px 8px", borderRadius: 20,
+                              flexShrink: 0,
+                            }}>
+                              In ontwikkeling
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -200,6 +281,91 @@ export default function OnboardingModal({ onComplete, isAanpassen, onClose }: Pr
                 </div>
               </div>
             )}
+
+            {step === 4 && (() => {
+              const gekozenVakken = ALLE_VAKKEN.filter(v => selected.has(v.id) && !v.isSchoolexamen);
+              return (
+                <div>
+                  <button onClick={() => setStep(3)} className="flex items-center gap-1 text-sm mb-4" style={{ color: "#64748B", minHeight: 44 }}>
+                    ← Terug
+                  </button>
+                  <h2 className="text-xl font-semibold mb-1" style={{ color: "#0F172A" }}>Wat zijn je huidige SE cijfers?</h2>
+                  <p className="text-sm mb-5" style={{ color: "#64748B" }}>De app gebruikt dit om te berekenen welke vakken meer aandacht nodig hebben. Je kunt dit later altijd aanpassen.</p>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {gekozenVakken.map(vak => {
+                      const hasError = seErrors[vak.id];
+                      return (
+                        <div key={vak.id}>
+                          <div style={{
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                            padding: "10px 14px", borderRadius: 10,
+                            border: `1px solid ${hasError ? "#EF4444" : "#E8ECF0"}`, background: "#FFFFFF",
+                          }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                              <div style={{ width: 8, height: 8, borderRadius: "50%", background: vak.kleur }} />
+                              <span style={{ fontSize: 14, color: "#0F172A" }}>{vak.naam}</span>
+                            </div>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="bijv. 6.8"
+                              value={seCijferRaw[vak.id] ?? ""}
+                              onChange={e => {
+                                const val = e.target.value;
+                                if (/^(\d{0,2}([.,]\d{0,1})?)?$/.test(val)) {
+                                  setSeCijferRaw(prev => ({ ...prev, [vak.id]: val.replace(",", ".") }));
+                                  if (seErrors[vak.id]) setSeErrors(prev => ({ ...prev, [vak.id]: false }));
+                                }
+                              }}
+                              style={{
+                                width: 80, padding: "8px 12px", borderRadius: 8,
+                                border: `1px solid ${hasError ? "#EF4444" : "#E8ECF0"}`,
+                                fontSize: 15, color: "#0F172A", background: "#F8F9FC",
+                                textAlign: "center", outline: "none",
+                              }}
+                            />
+                          </div>
+                          {hasError && (
+                            <p style={{ fontSize: 12, color: "#EF4444", marginTop: 4, paddingLeft: 4 }}>
+                              Vul een cijfer in tussen 1.0 en 10.0
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="sticky bottom-0 -mx-6 px-6 pt-4 pb-4" style={{ background: "#FFFFFF", borderTop: "1px solid #E8ECF0", marginTop: 24 }}>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button
+                        onClick={() => handleFinish(true)}
+                        disabled={saving}
+                        style={{
+                          flex: 1, padding: "12px 0", borderRadius: 10,
+                          border: "1px solid #E8ECF0", background: "#FFFFFF",
+                          color: "#64748B", fontSize: 14, cursor: "pointer",
+                        }}
+                      >
+                        Sla over
+                      </button>
+                      <button
+                        onClick={() => handleFinish()}
+                        disabled={saving}
+                        style={{
+                          flex: 2, padding: "12px 0", borderRadius: 10,
+                          border: "none", background: "#2563EB",
+                          color: "#FFFFFF", fontSize: 14, fontWeight: 600,
+                          cursor: "pointer", opacity: saving ? 0.6 : 1,
+                        }}
+                      >
+                        {saving ? "Opslaan..." : "Opslaan & beginnen →"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {step === 3 && vakken && (
               <div>
@@ -242,12 +408,12 @@ export default function OnboardingModal({ onComplete, isAanpassen, onClose }: Pr
                   </div>
                 ))}
 
-                {/* Sticky finish button */}
+                {/* Sticky next button */}
                 <div className="sticky bottom-0 -mx-6 px-6 pt-4 pb-4" style={{ background: "#FFFFFF", borderTop: "1px solid #E8ECF0", marginTop: 16 }}>
-                  <button onClick={handleFinish} disabled={saving}
-                    className="w-full py-3 rounded-xl font-semibold text-sm transition-colors disabled:opacity-60"
+                  <button onClick={() => setStep(4)}
+                    className="w-full py-3 rounded-xl font-semibold text-sm transition-colors"
                     style={{ background: "#2563EB", color: "white", minHeight: 48 }}>
-                    {saving ? "Opslaan..." : "Mijn dashboard instellen →"}
+                    Volgende: SE cijfers →
                   </button>
                 </div>
               </div>

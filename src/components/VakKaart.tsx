@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Vak, VakData } from "@/types";
 import HulpmiddelBadge from "./HulpmiddelBadge";
-import { daysLabel } from "@/lib/helpers";
+import { daysLabel, telLeerdoelen } from "@/lib/helpers";
 import { useDaysLeft } from "@/hooks/useDaysLeft";
 
 interface Props {
@@ -22,7 +22,7 @@ export default function VakKaart({ vak, userData, index }: Props) {
   const router = useRouter();
   const confidence = userData?.confidenceScore ?? 5;
   const cs = confidenceStyle(confidence);
-  const total = vak.syllabus.length;
+  const total = telLeerdoelen(vak);
   const done = userData?.checks ? Object.values(userData.checks ?? {}).filter(Boolean).length : 0;
   const pct = total > 0 ? (done / total) * 100 : 0;
   const daysLeft = useDaysLeft(vak.examDatum ?? "");
@@ -35,6 +35,7 @@ export default function VakKaart({ vak, userData, index }: Props) {
       transition={{ delay: index * 0.05, duration: 0.25 }}
       onClick={() => router.push(`/vak/${vak.id}`)}
       className="card card-hover cursor-pointer"
+      style={{ display: "flex", flexDirection: "column", minHeight: 148 }}
     >
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2 min-w-0">
@@ -54,18 +55,20 @@ export default function VakKaart({ vak, userData, index }: Props) {
           {vak.hulpmiddelen.map(h => <HulpmiddelBadge key={h} hulpmiddel={h} />)}
         </div>
       )}
-      <div className="w-full rounded-full overflow-hidden mb-2" style={{ height: 4, background: "#E8ECF0" }}>
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: vak.kleur }} />
-      </div>
-      <div className="flex justify-between items-center">
-        <span className="text-xs" style={{ color: "#94A3B8" }}>{done} / {total} onderwerpen</span>
-        {dl ? (
-          <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: dl.bg, color: dl.color }}>
-            {dl.text}
-          </span>
-        ) : (
-          <span className="text-xs" style={{ color: "#94A3B8" }}>Schoolexamen</span>
-        )}
+      <div style={{ marginTop: "auto" }}>
+        <div className="w-full rounded-full overflow-hidden mb-2" style={{ height: 4, background: "#E8ECF0" }}>
+          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: vak.kleur }} />
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="text-xs" style={{ color: "#94A3B8" }}>{done} / {total} onderwerpen</span>
+          {dl ? (
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: dl.bg, color: dl.color }}>
+              {dl.text}
+            </span>
+          ) : (
+            <span className="text-xs" style={{ color: "#94A3B8" }}>Schoolexamen</span>
+          )}
+        </div>
       </div>
     </motion.div>
   );

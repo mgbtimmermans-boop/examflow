@@ -2,8 +2,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Vak } from "@/types";
-import { useBioSync } from "@/hooks/useBioSync";
-import AdemhalingOefening from "@/components/AdemhalingOefening";
 
 // ─── Slaapadvies ──────────────────────────────────────────────────────────────
 
@@ -15,25 +13,52 @@ export interface SlaapAdvies {
   ochtendTip: string | null;
 }
 
-export function berekenSlaapAdvies(vak: Vak): SlaapAdvies | null {
+function tijdNaarMinuten(tijd: string): number {
+  const [u, m] = tijd.split(":").map(Number);
+  return u * 60 + (m ?? 0);
+}
+
+function minutenNaarTijd(min: number): string {
+  const uur = Math.floor(min / 60) % 24;
+  const minuten = min % 60;
+  return `${String(uur).padStart(2, "0")}:${String(minuten).padStart(2, "0")}`;
+}
+
+function berekenOptimaleWektijd(bedtijd: string, examTijd: string) {
+  const bedtijdMin = tijdNaarMinuten(bedtijd);
+  const examMin = tijdNaarMinuten(examTijd);
+  const maximaleWektijdMin = examMin - 90;
+  const beschikbaar = maximaleWektijdMin - bedtijdMin;
+  const cycli = Math.min(Math.max(Math.floor(beschikbaar / 90), 1), 5);
+  const slaapMin = cycli * 90;
+  return {
+    wektijd: minutenNaarTijd(bedtijdMin + slaapMin),
+    cycli,
+    slaapMinuten: slaapMin,
+  };
+}
+
+export function berekenSlaapAdvies(vak: Vak, bedtijd = "23:00"): SlaapAdvies | null {
   if (!vak.tijd || !vak.examDatum) return null;
   const [uur] = vak.tijd.split(":").map(Number);
   const isOchtend = uur < 12;
+  const { wektijd, cycli } = berekenOptimaleWektijd(bedtijd, vak.tijd);
+  const slaapUren = ((cycli * 90) / 60).toFixed(1).replace(".", ",");
 
   if (isOchtend) {
     return {
-      slapenOm: "23:00",
-      wakkerOm: "07:30",
-      cycli: 5,
-      tip: "Leg je telefoon om 22:30 weg. Zet twee wekkers.",
+      slapenOm: bedtijd,
+      wakkerOm: wektijd,
+      cycli,
+      tip: `${slaapUren} uur slaap · ${cycli} cycli. Leg je telefoon 30 min voor bedtijd weg. Zet twee wekkers.`,
       ochtendTip: null,
     };
   } else {
     return {
-      slapenOm: "23:00",
-      wakkerOm: "07:30",
-      cycli: 5,
-      tip: "Zelfde bedtijd als normaal — je lichaam houdt van ritme.",
+      slapenOm: bedtijd,
+      wakkerOm: wektijd,
+      cycli,
+      tip: `${slaapUren} uur slaap · ${cycli} cycli. Zelfde bedtijd als normaal — je lichaam houdt van ritme.`,
       ochtendTip: "Gebruik de ochtend voor een rustige laatste herhaling. Geen nieuwe stof meer leren.",
     };
   }
@@ -41,9 +66,9 @@ export function berekenSlaapAdvies(vak: Vak): SlaapAdvies | null {
 
 // ─── SlaapAdviesKaart ─────────────────────────────────────────────────────────
 
-export function SlaapAdviesKaart({ vak, daysLeft }: { vak: Vak; daysLeft: number }) {
+export function SlaapAdviesKaart({ vak, daysLeft, bedtijd = "23:00", onBedtijdBewerken }: { vak: Vak; daysLeft: number; bedtijd?: string; onBedtijdBewerken?: () => void }) {
   if (daysLeft > 3 || daysLeft < 0) return null;
-  const advies = berekenSlaapAdvies(vak);
+  const advies = berekenSlaapAdvies(vak, bedtijd);
   if (!advies) return null;
 
   return (
@@ -52,15 +77,22 @@ export function SlaapAdviesKaart({ vak, daysLeft }: { vak: Vak; daysLeft: number
       <div style={{ display: "flex", gap: 28, marginBottom: 12 }}>
         <div>
           <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "#9333EA", marginBottom: 4 }}>
-            Slaap om
+            Mijn bedtijd
           </p>
-          <p style={{ fontSize: 28, fontWeight: 600, color: "#7C3AED", lineHeight: 1 }}>
-            {advies.slapenOm}
-          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <p style={{ fontSize: 28, fontWeight: 600, color: "#7C3AED", lineHeight: 1 }}>
+              {advies.slapenOm}
+            </p>
+            {onBedtijdBewerken && (
+              <button onClick={onBedtijdBewerken} style={{ fontSize: 10, color: "#A855F7", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                bewerken
+              </button>
+            )}
+          </div>
         </div>
         <div>
           <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "#9333EA", marginBottom: 4 }}>
-            Wakker om
+            Optimaal wakker
           </p>
           <p style={{ fontSize: 28, fontWeight: 600, color: "#7C3AED", lineHeight: 1 }}>
             {advies.wakkerOm}
@@ -68,10 +100,10 @@ export function SlaapAdviesKaart({ vak, daysLeft }: { vak: Vak; daysLeft: number
         </div>
       </div>
       <p style={{ fontSize: 12, color: "#9333EA", marginBottom: 6 }}>
-        {advies.cycli} slaapcycli · 7,5 uur · optimaal
+        {advies.cycli} slaapcycli · {((advies.cycli * 90) / 60).toFixed(1).replace(".", ",")} uur slaap
       </p>
       <p style={{ fontSize: 12, color: "#A855F7", fontStyle: "italic", marginBottom: advies.ochtendTip ? 10 : 0 }}>
-        Tip: {advies.tip}
+        {advies.tip}
       </p>
       {advies.ochtendTip && (
         <div style={{ padding: "8px 10px", borderRadius: 8, background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
@@ -248,67 +280,3 @@ export function VoedingsTipKaart({ vak, daysLeft }: { vak: Vak; daysLeft: number
   );
 }
 
-// ─── DagelijkseCheckIn ───────────────────────────────────────────────────────
-
-const EMOJIS: { score: 1 | 2 | 3 | 4 | 5; emoji: string; hoverBorder: string }[] = [
-  { score: 1, emoji: "😩", hoverBorder: "#FECACA" },
-  { score: 2, emoji: "😕", hoverBorder: "#FECACA" },
-  { score: 3, emoji: "😐", hoverBorder: "#FDE68A" },
-  { score: 4, emoji: "🙂", hoverBorder: "#BBF7D0" },
-  { score: 5, emoji: "😄", hoverBorder: "#BBF7D0" },
-];
-
-export function DagelijkseCheckIn({ uid }: { uid: string }) {
-  const { hasDoneCheckIn, loading, submitCheckIn } = useBioSync(uid);
-  const [justSubmitted, setJustSubmitted] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
-  const [ademOpen, setAdemOpen] = useState(false);
-
-  async function handleScore(score: 1 | 2 | 3 | 4 | 5) {
-    await submitCheckIn(score);
-    setJustSubmitted(score);
-    if (score <= 2) setAdemOpen(true);
-  }
-
-  if (loading || (hasDoneCheckIn && justSubmitted === null)) return null;
-  if (ademOpen) return <AdemhalingOefening onClose={() => setAdemOpen(false)} />;
-
-  if (justSubmitted !== null) {
-    if (justSubmitted <= 2) return null;
-    const isGood = justSubmitted >= 4;
-    return (
-      <div className="card mb-6" style={{ background: isGood ? "#F0FDF4" : "#FFFBEB", border: `1px solid ${isGood ? "#BBF7D0" : "#FDE68A"}` }}>
-        <p style={{ fontSize: 14, color: isGood ? "#16A34A" : "#D97706", textAlign: "center", padding: "4px 0" }}>
-          {justSubmitted === 3 ? "Dat komt goed. Kleine stapjes." : "Top! Zo ga je dit examen winnen."}
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="card mb-6">
-      <p style={{ fontSize: 15, fontWeight: 500, color: "#0F172A", marginBottom: 16 }}>
-        Goedemorgen! Hoe voel je je vandaag?
-      </p>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {EMOJIS.map(({ score, emoji, hoverBorder }) => (
-          <button
-            key={score}
-            onClick={() => handleScore(score)}
-            style={{
-              width: 52, height: 52, borderRadius: "50%",
-              border: "2px solid transparent",
-              background: "#F8F9FC", fontSize: 24,
-              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "border-color 0.15s, background 0.15s",
-            }}
-            onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = hoverBorder; el.style.background = "#F1F5F9"; }}
-            onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "transparent"; el.style.background = "#F8F9FC"; }}
-            aria-label={`Score ${score}`}
-          >
-            {emoji}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}

@@ -1,5 +1,6 @@
 "use client";
 import { Vak, VakData } from "@/types";
+import { telLeerdoelen } from "@/lib/helpers";
 
 interface Props {
   vakken: Vak[];
@@ -10,7 +11,7 @@ export default function GlobalProgress({ vakken, allData }: Props) {
   let total = 0;
   let checked = 0;
   vakken.filter(v => !v.isSchoolexamen).forEach(vak => {
-    total += vak.syllabus.length;
+    total += telLeerdoelen(vak);
     const d = allData[vak.id];
     if (d?.checks) checked += Object.values(d.checks ?? {}).filter(Boolean).length;
   });
