@@ -6,8 +6,25 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "ExamFlow",
-  description: "Jouw persoonlijke examenplanner",
+  title: "ExamFlow — Studeer slimmer voor je eindexamen",
+  description: "ExamFlow is dé gratis studietool voor VWO en HAVO eindexamenkandidaten 2026. Syllabus afvinken, slimme herhaling en leeragenda op basis van de officiële CvTE syllabus.",
+  keywords: "eindexamen 2026, VWO studeren, HAVO studeren, syllabus afvinken, spaced repetition, examens, studietool, leeragenda",
+  authors: [{ name: "ExamFlow" }],
+  creator: "ExamFlow",
+  metadataBase: new URL("https://examflow.nl"),
+  openGraph: {
+    title: "ExamFlow — Studeer slimmer voor je eindexamen",
+    description: "Gratis studietool voor VWO en HAVO eindexamenkandidaten 2026. Gebaseerd op de officiële CvTE syllabus.",
+    url: "https://examflow.nl",
+    siteName: "ExamFlow",
+    locale: "nl_NL",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ExamFlow — Studeer slimmer voor je eindexamen",
+    description: "Gratis studietool voor VWO en HAVO eindexamenkandidaten 2026.",
+  },
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
