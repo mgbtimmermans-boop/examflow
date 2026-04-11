@@ -66,7 +66,7 @@ function useCountUp(end: number, inView: boolean, duration = 1200) {
   return value;
 }
 
-function StatCard({ value, label, index }: { value: string; label: string; index: number }) {
+function StatCard({ value, label, index, compact }: { value: string; label: string; index: number; compact?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true });
   const numMatch = value.match(/^([\d.]+)/);
@@ -86,10 +86,10 @@ function StatCard({ value, label, index }: { value: string; label: string; index
         textAlign: "center", border: "1px solid #E8ECF0",
       }}
     >
-      <div style={{ fontSize: 28, fontWeight: 800, color: "#2563EB", marginBottom: 4 }}>
+      <div style={{ fontSize: compact ? 22 : 28, fontWeight: 800, color: "#2563EB", marginBottom: 4 }}>
         {isNumeric ? `${num >= 5000 ? count.toLocaleString("nl-NL") : count}${suffix}` : value}
       </div>
-      <div style={{ fontSize: 13, color: "#64748B", fontWeight: 500 }}>{label}</div>
+      <div style={{ fontSize: compact ? 12 : 13, color: "#64748B", fontWeight: 500 }}>{label}</div>
     </motion.div>
   );
 }
@@ -383,6 +383,13 @@ const testimonials = [
 export default function Home() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
   useEffect(() => { if (!loading && user) router.replace("/dashboard"); }, [user, loading, router]);
   if (loading) return null;
   if (user) return null;
@@ -402,7 +409,7 @@ export default function Home() {
       </nav>
 
       {/* ── B. Hero ───────────────────────────────────────────────────────── */}
-      <section style={{ padding: "80px 0 60px", background: "#FFFFFF" }}>
+      <section style={{ padding: isMobile ? "48px 20px 40px" : "80px 0 60px", background: "#FFFFFF" }}>
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center gap-12" style={{ flexWrap: "wrap" }}>
             {/* Left: text */}
@@ -420,7 +427,7 @@ export default function Home() {
                 <motion.h1
                   variants={fadeUp}
                   transition={{ duration: 0.5, delay: 0.1 }}
-                  style={{ fontSize: "clamp(32px, 5vw, 52px)", fontWeight: 800, color: "#0F172A", lineHeight: 1.15, marginBottom: 20 }}
+                  style={{ fontSize: isMobile ? 32 : "clamp(32px, 5vw, 52px)", fontWeight: 800, color: "#0F172A", lineHeight: 1.15, marginBottom: 20 }}
                 >
                   Haal je hoogste cijfer<br />
                   <span style={{ color: "#2563EB" }}>met een slim studieplan</span>
@@ -428,15 +435,15 @@ export default function Home() {
                 <motion.p
                   variants={fadeUp}
                   transition={{ duration: 0.5, delay: 0.2 }}
-                  style={{ fontSize: 18, color: "#64748B", lineHeight: 1.7, maxWidth: 560, marginBottom: 32 }}
+                  style={{ fontSize: isMobile ? 15 : 18, color: "#64748B", lineHeight: 1.7, maxWidth: isMobile ? "100%" : 560, marginBottom: 32 }}
                 >
                   ExamFlow combineert de officiële syllabus, spaced repetition en slimme planning in één app — zodat jij precies weet wat je moet leren en wanneer.
                 </motion.p>
-                <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.3 }} className="flex items-center gap-3 flex-wrap">
-                  <Link href="/login" className="btn-primary text-base px-8 py-3" style={{ fontSize: 16, borderRadius: 12 }}>
+                <motion.div variants={fadeUp} transition={{ duration: 0.5, delay: 0.3 }} className="flex gap-3 flex-wrap" style={{ flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "stretch" : "center" }}>
+                  <Link href="/login" className="btn-primary text-base px-8 py-3" style={{ fontSize: 16, borderRadius: 12, textAlign: "center" }}>
                     Gratis beginnen
                   </Link>
-                  <a href="#hoe-het-werkt" className="text-sm font-medium flex items-center gap-1.5" style={{ color: "#64748B" }}>
+                  <a href="#hoe-het-werkt" className="text-sm font-medium flex items-center gap-1.5" style={{ color: "#64748B", justifyContent: isMobile ? "center" : "flex-start" }}>
                     Hoe werkt het?
                     <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   </a>
@@ -460,22 +467,22 @@ export default function Home() {
 
       {/* ── C. Stats ──────────────────────────────────────────────────────── */}
       <AnimatedSection>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6" style={{ paddingTop: 32, paddingBottom: 32, background: "#F8F9FC" }}>
+        <div className="max-w-4xl mx-auto px-4 sm:px-6" style={{ paddingTop: isMobile ? 24 : 32, paddingBottom: isMobile ? 24 : 32, paddingLeft: isMobile ? 20 : undefined, paddingRight: isMobile ? 20 : undefined, background: "#F8F9FC" }}>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {stats.map((s, i) => (
-              <StatCard key={i} value={s.value} label={s.label} index={i} />
+              <StatCard key={i} value={s.value} label={s.label} index={i} compact={isMobile} />
             ))}
           </div>
         </div>
       </AnimatedSection>
 
       {/* ── C2. Ons verhaal ───────────────────────────────────────────────── */}
-      <section style={{ background: "#FFFFFF", padding: "64px 0" }}>
+      <section style={{ background: "#FFFFFF", padding: isMobile ? "48px 20px" : "64px 0" }}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
-          <div className="flex gap-10 items-start" style={{ flexWrap: "wrap" }}>
+          <div className="flex gap-10 items-start" style={{ flexWrap: "wrap", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "center" : "flex-start" }}>
             {/* Left: avatar */}
             <motion.div
-              style={{ flex: "0 0 auto" }}
+              style={{ flex: "0 0 auto", textAlign: isMobile ? "center" : "left" }}
               initial="hidden"
               whileInView="visible"
               viewport={{ once: true, margin: "-60px" }}
@@ -486,7 +493,7 @@ export default function Home() {
                 width: 80, height: 80, borderRadius: "50%", background: "#2563EB",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 color: "white", fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em",
-                marginBottom: 12,
+                marginBottom: 12, marginLeft: isMobile ? "auto" : undefined, marginRight: isMobile ? "auto" : undefined,
               }}>
                 EF
               </div>
@@ -504,10 +511,10 @@ export default function Home() {
               transition={{ duration: 0.5, delay: 0.1 }}
             >
               <p style={{ fontSize: 13, fontWeight: 700, color: "#2563EB", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Ons verhaal</p>
-              <p style={{ fontSize: 15, color: "#374151", lineHeight: 1.75, marginBottom: 16 }}>
+              <p style={{ fontSize: isMobile ? 14 : 15, color: "#374151", lineHeight: 1.75, marginBottom: 16 }}>
                 Tijdens zijn examens zocht een VWO-leerling naar een tool die echt aansloot op de Nederlandse syllabus. Die bestond niet. Dus bouwde hij hem zelf — eerst voor zichzelf, later voor iedereen.
               </p>
-              <p style={{ fontSize: 15, color: "#374151", lineHeight: 1.75, marginBottom: 24 }}>
+              <p style={{ fontSize: isMobile ? 14 : 15, color: "#374151", lineHeight: 1.75, marginBottom: 24 }}>
                 ExamFlow is gebouwd vanuit de praktijk: gebaseerd op de officiële syllabus van het CvTE, wetenschappelijke leertheorieën en de dagelijkse realiteit van een examenleerling die wil weten wat hij moet leren, en wanneer.
               </p>
               <div className="flex flex-wrap gap-2">
@@ -531,7 +538,7 @@ export default function Home() {
 
       {/* ── D. Hoe het werkt ──────────────────────────────────────────────── */}
       <AnimatedSection className="py-20">
-        <div id="hoe-het-werkt" className="max-w-5xl mx-auto px-4 sm:px-6">
+        <div id="hoe-het-werkt" className="max-w-5xl mx-auto px-4 sm:px-6" style={isMobile ? { padding: "0 20px" } : undefined}>
           <motion.div variants={fadeUp} transition={{ duration: 0.5 }} style={{ textAlign: "center", marginBottom: 48 }}>
             <p style={{ fontSize: 13, fontWeight: 700, color: "#2563EB", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Hoe het werkt</p>
             <h2 style={{ fontSize: 28, fontWeight: 700, color: "#0F172A" }}>In drie stappen klaar voor je examen</h2>
@@ -543,7 +550,7 @@ export default function Home() {
                 variants={fadeUp}
                 transition={{ delay: i * 0.1, duration: 0.5 }}
                 style={{
-                  background: "white", borderRadius: 16, padding: 28,
+                  background: "white", borderRadius: 16, padding: isMobile ? 16 : 28,
                   border: "1px solid #E8ECF0", position: "relative",
                 }}
               >
@@ -560,7 +567,7 @@ export default function Home() {
                 >
                   STAP {step.num}
                 </motion.div>
-                <h3 style={{ fontSize: 17, fontWeight: 700, color: "#0F172A", marginBottom: 8 }}>{step.title}</h3>
+                <h3 style={{ fontSize: isMobile ? 15 : 17, fontWeight: 700, color: "#0F172A", marginBottom: 8 }}>{step.title}</h3>
                 <p style={{ fontSize: 14, color: "#64748B", lineHeight: 1.65 }}>{step.desc}</p>
               </motion.div>
             ))}
@@ -570,7 +577,7 @@ export default function Home() {
 
       {/* ── E. Features grid ──────────────────────────────────────────────── */}
       <AnimatedSection className="py-20">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6" style={isMobile ? { padding: "0 20px" } : undefined}>
           <motion.div variants={fadeUp} transition={{ duration: 0.5 }} style={{ textAlign: "center", marginBottom: 48 }}>
             <p style={{ fontSize: 13, fontWeight: 700, color: "#2563EB", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Functionaliteiten</p>
             <h2 style={{ fontSize: 28, fontWeight: 700, color: "#0F172A" }}>Alles wat je nodig hebt</h2>
@@ -583,7 +590,7 @@ export default function Home() {
                 transition={{ delay: i * 0.08, duration: 0.5 }}
                 whileHover={{ background: "#F8F9FC", transition: { duration: 0.2 } }}
                 style={{
-                  background: "white", borderRadius: 12, padding: 24,
+                  background: "white", borderRadius: 12, padding: isMobile ? 16 : 24,
                   border: "1px solid #E8ECF0",
                 }}
               >
@@ -595,7 +602,7 @@ export default function Home() {
                   {f.icon}
                 </div>
                 <h3 style={{ fontSize: 15, fontWeight: 700, color: "#0F172A", marginBottom: 6 }}>{f.title}</h3>
-                <p style={{ fontSize: 14, color: "#64748B", lineHeight: 1.6 }}>{f.desc}</p>
+                <p style={{ fontSize: isMobile ? 13 : 14, color: "#64748B", lineHeight: 1.6 }}>{f.desc}</p>
               </motion.div>
             ))}
           </div>
@@ -604,10 +611,10 @@ export default function Home() {
 
       {/* ── F. Wetenschap ─────────────────────────────────────────────────── */}
       <Section className="py-20">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6" style={isMobile ? { padding: "0 20px" } : undefined}>
           <div style={{
             background: "linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%)",
-            borderRadius: 24, padding: "48px 40px", color: "white",
+            borderRadius: isMobile ? 16 : 24, padding: isMobile ? "32px 20px" : "48px 40px", color: "white",
             position: "relative", overflow: "hidden",
           }}>
             {/* Decorative circles */}
@@ -617,12 +624,12 @@ export default function Home() {
             <div style={{ position: "relative", zIndex: 1 }}>
               <div style={{ textAlign: "center", marginBottom: 32 }}>
                 <p style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12, color: "rgba(255,255,255,0.7)" }}>Wetenschappelijk bewezen</p>
-                <h2 style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 16 }}>Spaced repetition: vergeet nooit meer wat je leert</h2>
+                <h2 style={{ fontSize: isMobile ? 20 : 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 16 }}>Spaced repetition: vergeet nooit meer wat je leert</h2>
               </div>
 
               <ForgettingCurve />
 
-              <p style={{ fontSize: 15, lineHeight: 1.7, color: "rgba(255,255,255,0.85)", maxWidth: 520, margin: "0 auto", textAlign: "center" }}>
+              <p style={{ fontSize: isMobile ? 13 : 15, lineHeight: 1.7, color: "rgba(255,255,255,0.85)", maxWidth: 520, margin: "0 auto", textAlign: "center" }}>
                 Onderzoek toont aan dat herhalen op stijgende intervallen (1→3→7 dagen) de meest effectieve leermethode is. ExamFlow past dit automatisch toe — je hoeft alleen maar te oefenen.
               </p>
             </div>
@@ -632,7 +639,7 @@ export default function Home() {
 
       {/* ── G. Social proof ───────────────────────────────────────────────── */}
       <AnimatedSection className="py-20">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6" style={isMobile ? { padding: "0 20px" } : undefined}>
           <motion.div variants={fadeUp} transition={{ duration: 0.5 }} style={{ textAlign: "center", marginBottom: 48 }}>
             <p style={{ fontSize: 13, fontWeight: 700, color: "#2563EB", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Early access gebruikers</p>
             <h2 style={{ fontSize: 28, fontWeight: 700, color: "#0F172A" }}>Wat leerlingen zeggen</h2>
@@ -644,12 +651,12 @@ export default function Home() {
                 variants={fadeUp}
                 transition={{ delay: i * 0.1, duration: 0.5 }}
                 style={{
-                  background: "white", borderRadius: 16, padding: 24,
+                  background: "white", borderRadius: 16, padding: isMobile ? 16 : 24,
                   border: "1px solid #E8ECF0",
                 }}
               >
                 <div style={{ fontSize: 40, lineHeight: 1, color: "#2563EB", fontFamily: "Georgia, serif", marginBottom: 8 }}>&ldquo;</div>
-                <p style={{ fontSize: 14, color: "#374151", lineHeight: 1.65, marginBottom: 16 }}>{t.text}</p>
+                <p style={{ fontSize: isMobile ? 13 : 14, color: "#374151", lineHeight: 1.65, marginBottom: 16 }}>{t.text}</p>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{t.name}</div>
                   <div style={{ fontSize: 12, color: "#94A3B8" }}>{t.role}</div>
@@ -663,7 +670,7 @@ export default function Home() {
       {/* ── H. CTA ────────────────────────────────────────────────────────── */}
       <Section className="py-20">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
-          <h2 style={{ fontSize: 32, fontWeight: 800, color: "#0F172A", marginBottom: 12 }}>
+          <h2 style={{ fontSize: isMobile ? 26 : 32, fontWeight: 800, color: "#0F172A", marginBottom: 12 }}>
             Studeer zoals het bedoeld is.
           </h2>
           <p style={{ fontSize: 16, color: "#64748B", lineHeight: 1.7, marginBottom: 32, maxWidth: 480, margin: "0 auto 32px" }}>
