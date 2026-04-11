@@ -384,6 +384,7 @@ export default function Home() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [isMobile, setIsMobile] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 640);
     check();
@@ -396,6 +397,43 @@ export default function Home() {
 
   return (
     <div className="min-h-screen" style={{ background: "#F8F9FC" }}>
+
+      {/* ── Structured data ───────────────────────────────────────────────── */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "WebApplication",
+            "name": "ExamFlow",
+            "url": "https://examflow.nl",
+            "description": "Gratis studietool voor VWO en HAVO eindexamenkandidaten 2026. Syllabus afvinken, slimme herhaling en leeragenda op basis van de officiële CvTE syllabus.",
+            "applicationCategory": "EducationalApplication",
+            "operatingSystem": "Web",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+            "audience": { "@type": "EducationalAudience", "educationalRole": "student" },
+            "inLanguage": "nl-NL",
+            "educationalLevel": "VWO, HAVO",
+            "countryOfOrigin": "NL",
+          }),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            "mainEntity": [
+              { "@type": "Question", "name": "Wat is ExamFlow?", "acceptedAnswer": { "@type": "Answer", "text": "ExamFlow is een gratis studietool voor VWO en HAVO eindexamenkandidaten. De app combineert de officiële CvTE syllabus met spaced repetition en een slimme leeragenda." } },
+              { "@type": "Question", "name": "Is ExamFlow gratis?", "acceptedAnswer": { "@type": "Answer", "text": "Ja, ExamFlow is volledig gratis voor alle leerlingen. Er zijn geen verborgen kosten of premium functies." } },
+              { "@type": "Question", "name": "Voor welke vakken werkt ExamFlow?", "acceptedAnswer": { "@type": "Answer", "text": "ExamFlow ondersteunt meer dan 28 vakken voor VWO en HAVO, waaronder Economie, Wiskunde, Biologie, Scheikunde, Geschiedenis, Aardrijkskunde en alle talen." } },
+              { "@type": "Question", "name": "Hoe werkt de herhalingsfunctie?", "acceptedAnswer": { "@type": "Answer", "text": "Na het afvinken van een leerdoel plant ExamFlow automatisch herhalingen in op basis van spaced repetition: na 1 dag, 3 dagen en 7 dagen. Elke herhaling bevat een oefenvraag op oplopend niveau." } },
+              { "@type": "Question", "name": "Is ExamFlow gebaseerd op de officiële syllabus?", "acceptedAnswer": { "@type": "Answer", "text": "Ja, ExamFlow is volledig gebaseerd op de officiële syllabus van het College voor Toetsen en Examens (CvTE) voor het schooljaar 2025-2026." } },
+            ],
+          }),
+        }}
+      />
 
       {/* ── A. Navbar ─────────────────────────────────────────────────────── */}
       <nav style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(12px)", borderBottom: "1px solid #E8ECF0", position: "sticky", top: 0, zIndex: 50 }}>
@@ -667,7 +705,55 @@ export default function Home() {
         </div>
       </AnimatedSection>
 
-      {/* ── H. CTA ────────────────────────────────────────────────────────── */}
+      {/* ── H. FAQ ──────────────────────────────────────────────────────── */}
+      <Section className="py-20">
+        <div style={{ maxWidth: 680, margin: "0 auto", padding: isMobile ? "0 20px" : "0 24px" }}>
+          <div style={{ textAlign: "center", marginBottom: 40 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "#2563EB", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>FAQ</p>
+            <h2 style={{ fontSize: isMobile ? 24 : 28, fontWeight: 700, color: "#0F172A" }}>Veelgestelde vragen</h2>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {[
+              { q: "Is ExamFlow gratis?", a: "Ja, volledig gratis voor alle leerlingen. Geen verborgen kosten, geen premium versie." },
+              { q: "Voor welke vakken werkt ExamFlow?", a: "Meer dan 28 vakken voor VWO en HAVO — van Economie en Wiskunde tot Biologie, Geschiedenis en alle talen." },
+              { q: "Is de syllabus up-to-date?", a: "Ja. ExamFlow is gebaseerd op de officiële syllabus van het CvTE voor het examenjaar 2025-2026." },
+              { q: "Hoe werkt de herhalingsfunctie?", a: "Na het afvinken van een leerdoel plant ExamFlow automatisch herhalingen in: na 1 dag, 3 dagen en 7 dagen. Elke herhaling bevat een oefenvraag op oplopend niveau — van basis tot moeilijk." },
+              { q: "Kan mijn docent ExamFlow ook gebruiken?", a: "ExamFlow is primair gebouwd voor leerlingen. Docenten kunnen de app gratis bekijken en doorsturen naar leerlingen." },
+            ].map((item, i) => (
+              <div key={i} style={{ border: "1px solid #E8ECF0", borderRadius: 12, overflow: "hidden", background: "white" }}>
+                <button
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                  style={{
+                    width: "100%", padding: "16px 20px", display: "flex", justifyContent: "space-between",
+                    alignItems: "center", background: "none", border: "none", cursor: "pointer", textAlign: "left",
+                  }}
+                >
+                  <span style={{ fontSize: 15, fontWeight: 600, color: "#0F172A" }}>{item.q}</span>
+                  <motion.span
+                    animate={{ rotate: openFaq === i ? 45 : 0 }}
+                    transition={{ duration: 0.2 }}
+                    style={{ fontSize: 20, color: "#94A3B8", flexShrink: 0, marginLeft: 12 }}
+                  >
+                    +
+                  </motion.span>
+                </button>
+                <motion.div
+                  initial={false}
+                  animate={{ height: openFaq === i ? "auto" : 0, opacity: openFaq === i ? 1 : 0 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  style={{ overflow: "hidden" }}
+                >
+                  <div style={{ padding: "0 20px 16px", fontSize: 14, color: "#64748B", lineHeight: 1.6 }}>
+                    {item.a}
+                  </div>
+                </motion.div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Section>
+
+      {/* ── I. CTA ────────────────────────────────────────────────────────── */}
       <Section className="py-20">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
           <h2 style={{ fontSize: isMobile ? 26 : 32, fontWeight: 800, color: "#0F172A", marginBottom: 12 }}>
