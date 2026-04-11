@@ -26,9 +26,12 @@ export const metadata: Metadata = {
     description: "Gratis studietool voor VWO en HAVO eindexamenkandidaten 2026.",
   },
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
-    apple: "/favicon.svg",
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.png", type: "image/png", sizes: "32x32" },
+    ],
+    apple: "/apple-touch-icon.png",
+    shortcut: "/favicon.png",
   },
 };
 
