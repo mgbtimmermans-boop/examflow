@@ -25,14 +25,6 @@ export const metadata: Metadata = {
     title: "ExamFlow — Studeer slimmer voor je eindexamen",
     description: "Gratis studietool voor VWO en HAVO eindexamenkandidaten 2026.",
   },
-  icons: {
-    icon: [
-      { url: "/favicon.png", type: "image/png", sizes: "32x32" },
-      { url: "/favicon.svg", type: "image/svg+xml" },
-    ],
-    apple: "/apple-touch-icon.png",
-    shortcut: "/favicon.png",
-  },
 };
 
 export const viewport: Viewport = {
@@ -44,6 +36,11 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="nl" className={inter.variable}>
+      <head>
+        <link rel="icon" href="/favicon.png" type="image/png" sizes="32x32" />
+        <link rel="shortcut icon" href="/favicon.png" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+      </head>
       <body><AuthProvider>{children}</AuthProvider></body>
     </html>
   );
