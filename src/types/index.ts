@@ -37,7 +37,6 @@ export interface GebruikerInstellingen {
   hasFilledSeCijfers?: boolean;
   seCijfers?: Record<string, number>;
   streefCijfers?: Record<string, number>;
-  combinatieCijfers?: Record<string, number>;
   planning?: PlanningVoorkeuren;
   displayName?: string;
   bedtijd?: string; // e.g. "23:00"
@@ -49,7 +48,6 @@ export interface VakData {
   notes: string;
   confidenceScore: number;
   seGrade: string;
-  combinatieCijfer?: number;
   lastUpdated: Timestamp | null;
 }
 

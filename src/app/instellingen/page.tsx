@@ -99,12 +99,9 @@ export default function InstellingenPage() {
   // ── Cijfers state ──
   const [seCijferRaw, setSeCijferRaw] = useState<Record<string, string>>({});
   const [streefRaw, setStreefRaw] = useState<Record<string, string>>({});
-  const [combiRaw, setCombiRaw] = useState<Record<string, string>>({});
   const [seErrors, setSeErrors] = useState<Record<string, boolean>>({});
   const [streefErrors, setStreefErrors] = useState<Record<string, boolean>>({});
-  const [combiErrors, setCombiErrors] = useState<Record<string, boolean>>({});
   const [cijfersSaved, setCijfersSaved] = useState(false);
-  const [cumLaudeActief, setCumLaudeActief] = useState(false);
 
   // ── Planning state ──
   const [voorkeurTijden, setVoorkeurTijden] = useState<string[]>(["middag"]);
@@ -154,13 +151,6 @@ export default function InstellingenPage() {
       }
       setStreefRaw(raw);
     }
-    if (instellingen.combinatieCijfers) {
-      const raw: Record<string, string> = {};
-      for (const [k, v] of Object.entries(instellingen.combinatieCijfers)) {
-        if (v != null) raw[k] = String(v);
-      }
-      setCombiRaw(raw);
-    }
     if (instellingen.planning) {
       setVoorkeurTijden(instellingen.planning.voorkeurTijden ?? ["middag"]);
       setStandaardDuur(instellingen.planning.standaardDuur ?? 60);
@@ -198,10 +188,8 @@ export default function InstellingenPage() {
   async function slaCijfersOp() {
     const parsedSe: Record<string, number> = {};
     const parsedStreef: Record<string, number> = {};
-    const parsedCombi: Record<string, number> = {};
     const seErr: Record<string, boolean> = {};
     const streefErr: Record<string, boolean> = {};
-    const combiErr: Record<string, boolean> = {};
     let hasError = false;
 
     for (const [id, val] of Object.entries(seCijferRaw)) {
@@ -216,19 +204,12 @@ export default function InstellingenPage() {
       if (isNaN(n) || n < 1.0 || n > 10.0) { streefErr[id] = true; hasError = true; }
       else parsedStreef[id] = n;
     }
-    for (const [id, val] of Object.entries(combiRaw)) {
-      if (!val.trim()) continue;
-      const n = parseFloat(val);
-      if (isNaN(n) || n < 1.0 || n > 10.0) { combiErr[id] = true; hasError = true; }
-      else parsedCombi[id] = n;
-    }
 
     setSeErrors(seErr);
     setStreefErrors(streefErr);
-    setCombiErrors(combiErr);
     if (hasError) return;
 
-    await saveInstellingen({ ...inst, seCijfers: parsedSe, streefCijfers: parsedStreef, combinatieCijfers: parsedCombi });
+    await saveInstellingen({ ...inst, seCijfers: parsedSe, streefCijfers: parsedStreef });
     setCijfersSaved(true);
     setTimeout(() => setCijfersSaved(false), 3000);
   }
@@ -474,91 +455,7 @@ export default function InstellingenPage() {
             )}
 
             {/* ── SECTIE 2: CIJFERS ── */}
-            {activeTab === "cijfers" && (() => {
-              // ── Cum Laude berekening ──
-              type CumLaudeVakResultaat = {
-                eindcijfer?: number;
-                benodigdCE?: number;
-                haalbaar: boolean;
-                status: "combinatie" | "compleet" | "berekend" | "niet_haalbaar";
-              };
-
-              function berekenCumLaude() {
-                const resultaten: Record<string, CumLaudeVakResultaat> = {};
-
-                // Stap 1: eindcijfers die al bekend zijn
-                for (const vak of gekozenVakken) {
-                  const combi = parseFloat(combiRaw[vak.id] ?? "");
-                  const se = parseFloat(seCijferRaw[vak.id] ?? "");
-                  const ce = parseFloat(streefRaw[vak.id] ?? "");
-
-                  if (!isNaN(combi) && combi >= 1 && combi <= 10) {
-                    resultaten[vak.id] = {
-                      eindcijfer: combi,
-                      status: "combinatie",
-                      haalbaar: combi >= 6,
-                    };
-                  } else if (!isNaN(se) && !isNaN(ce)) {
-                    const eindcijfer = Math.round((se + ce) / 2);
-                    resultaten[vak.id] = {
-                      eindcijfer,
-                      status: "compleet",
-                      haalbaar: eindcijfer >= 6,
-                    };
-                  }
-                }
-
-                // Stap 2: benodigde CE voor Cum Laude (gemiddelde >= 8.0)
-                const vakkenZonderCE = gekozenVakken.filter(v => {
-                  const combi = parseFloat(combiRaw[v.id] ?? "");
-                  const se = parseFloat(seCijferRaw[v.id] ?? "");
-                  const ce = parseFloat(streefRaw[v.id] ?? "");
-                  return (isNaN(combi) || combi < 1 || combi > 10) && !isNaN(se) && (isNaN(ce) || ce < 1 || ce > 10);
-                });
-
-                const bekendGemiddelde = Object.values(resultaten)
-                  .filter(r => r.eindcijfer !== undefined)
-                  .reduce((sum, r) => sum + (r.eindcijfer ?? 0), 0);
-                const aantalOnbekend = vakkenZonderCE.length;
-                const totaalVakken = gekozenVakken.length;
-
-                const benodigdeTotaalSom = 8.0 * totaalVakken;
-                const resterendeSom = benodigdeTotaalSom - bekendGemiddelde;
-                const gemiddeldePerOnbekendVak = aantalOnbekend > 0 ? resterendeSom / aantalOnbekend : 0;
-
-                for (const vak of vakkenZonderCE) {
-                  const se = parseFloat(seCijferRaw[vak.id] ?? "");
-                  if (isNaN(se)) continue;
-                  const streefEindcijfer = Math.max(8, Math.ceil(gemiddeldePerOnbekendVak));
-                  const benodigdCE = 2 * streefEindcijfer - se;
-                  const haalbaar = benodigdCE <= 10 && benodigdCE >= 1;
-
-                  resultaten[vak.id] = {
-                    benodigdCE: Math.round(benodigdCE * 10) / 10,
-                    eindcijfer: haalbaar ? streefEindcijfer : undefined,
-                    status: haalbaar ? "berekend" : "niet_haalbaar",
-                    haalbaar,
-                  };
-                }
-
-                // Stap 3: check haalbaarheid
-                const alleEindcijfers = Object.values(resultaten)
-                  .map(r => r.eindcijfer)
-                  .filter((e): e is number => e !== undefined);
-                const gemiddelde = alleEindcijfers.length > 0
-                  ? alleEindcijfers.reduce((a, b) => a + b, 0) / alleEindcijfers.length
-                  : 0;
-                const geenOnvoldoende = alleEindcijfers.every(e => e >= 6);
-                const cumLaudeHaalbaar = gemiddelde >= 8.0 && geenOnvoldoende &&
-                  Object.values(resultaten).every(r => r.haalbaar);
-
-                return { resultaten, gemiddelde, cumLaudeHaalbaar };
-              }
-
-              const clResultaat = cumLaudeActief ? berekenCumLaude() : null;
-              const vakkenBoven9 = clResultaat ? Object.values(clResultaat.resultaten).filter(r => r.benodigdCE && r.benodigdCE > 9.0).length : 0;
-
-              return (
+            {activeTab === "cijfers" && (
               <div data-tour="cijferdoelen-sectie">
               <SectionCard id="cijfers" title="Cijfers & doelen">
                 <p style={{ fontSize: 13, color: "#64748B", marginBottom: 20, lineHeight: 1.6 }}>
@@ -566,37 +463,18 @@ export default function InstellingenPage() {
                   De app gebruikt dit om te bepalen welke vakken meer aandacht nodig hebben.
                 </p>
 
-                {/* Cum Laude knop */}
-                <div style={{ marginBottom: 20 }}>
-                  <button
-                    onClick={() => setCumLaudeActief(prev => !prev)}
-                    style={{
-                      padding: "10px 20px", borderRadius: 8,
-                      border: cumLaudeActief ? "2px solid #F59E0B" : "2px solid transparent",
-                      background: "#F59E0B", color: "#FFFFFF",
-                      fontSize: 14, fontWeight: 600, cursor: "pointer",
-                      display: "inline-flex", alignItems: "center", gap: 8,
-                    }}
-                  >
-                    {"🏆 Bereken Cum Laude"}
-                  </button>
-                </div>
-
                 {/* Column headers */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 80px", gap: 8, marginBottom: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px", gap: 8, marginBottom: 8 }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Vak</div>
                   <div style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em" }}>SE</div>
                   <div style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Doel CE</div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Combi</div>
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {gekozenVakken.map(vak => {
-                    const clVak = clResultaat?.resultaten[vak.id];
-                    return (
+                  {gekozenVakken.map(vak => (
                     <div key={vak.id}>
                       <div style={{
-                        display: "grid", gridTemplateColumns: "1fr 80px 80px 80px",
+                        display: "grid", gridTemplateColumns: "1fr 80px 80px",
                         gap: 8, alignItems: "center",
                         padding: "8px 0", borderBottom: "1px solid #F1F5F9",
                       }}>
@@ -644,107 +522,15 @@ export default function InstellingenPage() {
                             textAlign: "center", outline: "none",
                           }}
                         />
-
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          placeholder="—"
-                          value={combiRaw[vak.id] ?? ""}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (/^(\d{0,2}([.,]\d{0,1})?)?$/.test(val)) {
-                              setCombiRaw(prev => ({ ...prev, [vak.id]: val.replace(",", ".") }));
-                              if (combiErrors[vak.id]) setCombiErrors(prev => ({ ...prev, [vak.id]: false }));
-                            }
-                          }}
-                          style={{
-                            width: 80, padding: "8px 12px", borderRadius: 8,
-                            border: `1px solid ${combiErrors[vak.id] ? "#EF4444" : "#E8ECF0"}`,
-                            fontSize: 15, color: "#0F172A", background: "#F8F9FC",
-                            textAlign: "center", outline: "none",
-                          }}
-                        />
                       </div>
-
-                      {/* Cum Laude badge per vak */}
-                      {cumLaudeActief && clVak && (
-                        <div style={{ paddingLeft: 15, paddingTop: 4, paddingBottom: 4 }}>
-                          {clVak.status === "combinatie" && (
-                            <span style={{
-                              display: "inline-block", padding: "3px 10px", borderRadius: 6,
-                              fontSize: 12, fontWeight: 500,
-                              background: "#FFFBEB", color: "#F59E0B",
-                            }}>
-                              Combinatiecijfer: {clVak.eindcijfer}
-                            </span>
-                          )}
-                          {clVak.status === "compleet" && (
-                            <span style={{
-                              display: "inline-block", padding: "3px 10px", borderRadius: 6,
-                              fontSize: 12, fontWeight: 500,
-                              background: "#F0FDF4", color: "#16A34A",
-                            }}>
-                              Eindcijfer: {clVak.eindcijfer}
-                            </span>
-                          )}
-                          {clVak.status === "berekend" && clVak.benodigdCE !== undefined && (
-                            <span style={{
-                              display: "inline-block", padding: "3px 10px", borderRadius: 6,
-                              fontSize: 12, fontWeight: 500,
-                              background: clVak.benodigdCE > 8.5 ? "#FFFBEB" : "#F0FDF4",
-                              color: clVak.benodigdCE > 8.5 ? "#D97706" : "#16A34A",
-                            }}>
-                              CE: {clVak.benodigdCE} — {clVak.benodigdCE > 8.5 ? "uitdagend" : "haalbaar"}
-                            </span>
-                          )}
-                          {clVak.status === "niet_haalbaar" && (
-                            <span style={{
-                              display: "inline-block", padding: "3px 10px", borderRadius: 6,
-                              fontSize: 12, fontWeight: 500,
-                              background: "#FEF2F2", color: "#DC2626",
-                            }}>
-                              Niet haalbaar
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {(seErrors[vak.id] || streefErrors[vak.id] || combiErrors[vak.id]) && (
+                      {(seErrors[vak.id] || streefErrors[vak.id]) && (
                         <p style={{ fontSize: 12, color: "#EF4444", marginTop: 2, paddingLeft: 15 }}>
                           Vul een cijfer in tussen 1.0 en 10.0
                         </p>
                       )}
                     </div>
-                    );
-                  })}
+                  ))}
                 </div>
-
-                {/* Cum Laude samenvattingsbalk */}
-                {cumLaudeActief && clResultaat && (
-                  <div style={{
-                    marginTop: 20, padding: 16, borderRadius: 12,
-                    background: clResultaat.cumLaudeHaalbaar ? "#F0FDF4" : "#FEF2F2",
-                    border: `1px solid ${clResultaat.cumLaudeHaalbaar ? "#BBF7D0" : "#FECACA"}`,
-                  }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "#0F172A", marginBottom: 6 }}>
-                      Verwacht gemiddelde: {clResultaat.gemiddelde > 0 ? clResultaat.gemiddelde.toFixed(1) : "—"}
-                    </div>
-                    <div style={{
-                      fontSize: 14, fontWeight: 600,
-                      color: clResultaat.cumLaudeHaalbaar ? "#16A34A" : "#DC2626",
-                      marginBottom: vakkenBoven9 > 0 ? 6 : 0,
-                    }}>
-                      {clResultaat.cumLaudeHaalbaar
-                        ? "Cum Laude: \u2713 Haalbaar"
-                        : "Cum Laude: \u2717 Niet haalbaar met huidige SE cijfers"}
-                    </div>
-                    {vakkenBoven9 > 0 && (
-                      <div style={{ fontSize: 13, color: "#D97706" }}>
-                        {vakkenBoven9} {vakkenBoven9 === 1 ? "vak vraagt" : "vakken vragen"} een CE boven 9.0 — focus hierop
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 <div style={{ marginTop: 20, display: "flex", alignItems: "center", gap: 12 }}>
                   <button
@@ -761,8 +547,7 @@ export default function InstellingenPage() {
                 </div>
               </SectionCard>
               </div>
-              );
-            })()}
+            )}
 
             {/* ── SECTIE 3: PLANNING ── */}
             {activeTab === "planning" && (
