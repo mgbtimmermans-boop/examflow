@@ -408,7 +408,7 @@ export default function SyllabusTree({ syllabus, voortgang, onToggle, onOefen, h
                               </span>
                               <span style={{ fontSize: 13, fontWeight: 500, color: "#374151", textAlign: "left" }}>
                                 {subNaam || (sub.naam ?? sub.titel ?? "")}
-                                {zwakSet.has(sub.id) && !weggeklikteDomeinen.includes(sub.id) && subPct < 100 && <span style={{ fontSize: 12, color: "#F59E0B", marginLeft: 6 }}>&#9888;</span>}
+                                {zwakSet.has(sub.id) && !weggeklikteDomeinen.includes(sub.id) && !weggeklikteDomeinen.includes(domein.id) && subPct < 100 && <span style={{ fontSize: 12, color: "#F59E0B", marginLeft: 6 }}>&#9888;</span>}
                               </span>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
