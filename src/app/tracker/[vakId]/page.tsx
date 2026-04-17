@@ -257,7 +257,16 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
   // ── Delete examen ─────────────────────────────────────────────────────────
   async function handleDelete(exId: string) {
     if (!user || !db) return;
+
+    // Verwijder het examen
     await deleteDoc(doc(db, "users", user.uid, "tracker", vakId, "examens", exId));
+
+    // Herbereken zwakeDomeinen op basis van resterende examens
+    const resterendeExamens = examens.filter((e) => e.id !== exId);
+    const nieuweZwakeDomeinen = [...new Set(resterendeExamens.flatMap((e) => e.zwakeDomeinen ?? []))];
+
+    // Update Firestore
+    await setDoc(doc(db, "users", user.uid, "tracker", vakId), { zwakeDomeinen: nieuweZwakeDomeinen }, { merge: true });
   }
 
   // ── Computed ──────────────────────────────────────────────────────────────
