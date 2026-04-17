@@ -20,7 +20,7 @@ import Navbar from "@/components/Navbar";
 import { ALLE_VAKKEN } from "@/data/vakken";
 import { useInstellingen } from "@/hooks/useVakData";
 import { Onderwijsniveau, OefenExamen } from "@/types";
-import { VakSyllabus, Domein } from "@/types/syllabus";
+import { VakSyllabus, Domein, Subdomein } from "@/types/syllabus";
 
 import {
   LineChart,
@@ -98,10 +98,45 @@ const SYLLABI: Record<string, VakSyllabus> = {
   "frans-vwo": FRANS_VWO_SYLLABUS,
 };
 
+// ── STAP 7: AlleExamens URL lookup ──────────────────────────────────────────
+const ALLE_EXAMENS_URLS: Record<string, string> = {
+  "economie-vwo": "https://www.alleexamens.nl/vwo/economie",
+  "economie-havo": "https://www.alleexamens.nl/havo/economie",
+  "biologie-vwo": "https://www.alleexamens.nl/vwo/biologie",
+  "biologie-havo": "https://www.alleexamens.nl/havo/biologie",
+  "scheikunde-vwo": "https://www.alleexamens.nl/vwo/scheikunde",
+  "scheikunde-havo": "https://www.alleexamens.nl/havo/scheikunde",
+  "natuurkunde-vwo": "https://www.alleexamens.nl/vwo/natuurkunde",
+  "natuurkunde-havo": "https://www.alleexamens.nl/havo/natuurkunde",
+  "wiskunde-a-vwo": "https://www.alleexamens.nl/vwo/wiskunde-a",
+  "wiskunde-a-havo": "https://www.alleexamens.nl/havo/wiskunde-a",
+  "wiskunde-b-vwo": "https://www.alleexamens.nl/vwo/wiskunde-b",
+  "wiskunde-b-havo": "https://www.alleexamens.nl/havo/wiskunde-b",
+  "geschiedenis-vwo": "https://www.alleexamens.nl/vwo/geschiedenis",
+  "geschiedenis-havo": "https://www.alleexamens.nl/havo/geschiedenis",
+  "aardrijkskunde-vwo": "https://www.alleexamens.nl/vwo/aardrijkskunde",
+  "aardrijkskunde-havo": "https://www.alleexamens.nl/havo/aardrijkskunde",
+  "nederlands-vwo": "https://www.alleexamens.nl/vwo/nederlands",
+  "nederlands-havo": "https://www.alleexamens.nl/havo/nederlands",
+  "engels-vwo": "https://www.alleexamens.nl/vwo/engels",
+  "engels-havo": "https://www.alleexamens.nl/havo/engels",
+  "duits-vwo": "https://www.alleexamens.nl/vwo/duits",
+  "duits-havo": "https://www.alleexamens.nl/havo/duits",
+  "bedrijfseconomie-vwo": "https://www.alleexamens.nl/vwo/bedrijfseconomie",
+  "bedrijfseconomie-havo": "https://www.alleexamens.nl/havo/bedrijfseconomie",
+};
+
+// ── STAP 1: Examenjaren 2000-2025 aflopend ─────────────────────────────────
+const EXAMENJAREN = Array.from({ length: 26 }, (_, i) => 2025 - i);
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function domeinLabel(d: Domein): string {
   return d.naam ?? d.titel ?? d.id;
+}
+
+function subdomeinLabel(s: Subdomein): string {
+  return s.naam ?? s.titel ?? s.id;
 }
 
 function today() {
@@ -137,6 +172,7 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
   const [fJaar, setFJaar] = useState("2024");
   const [fTijdvak, setFTijdvak] = useState<"I" | "II">("I");
   const [fZwak, setFZwak] = useState<string[]>([]);
+  const [fZwakOmschrijving, setFZwakOmschrijving] = useState("");
   const [fNotities, setFNotities] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -148,7 +184,6 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
   // ── Firestore listeners ───────────────────────────────────────────────────
   useEffect(() => {
     if (!user || !db) return;
-    // Listen for streefCijfer
     const trackerRef = doc(db, "users", user.uid, "tracker", vakId);
     getDoc(trackerRef).then((snap) => {
       if (snap.exists()) {
@@ -157,7 +192,6 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
       }
     });
 
-    // Listen for examens
     const exRef = collection(db, "users", user.uid, "tracker", vakId, "examens");
     const q = query(exRef, orderBy("datum", "asc"));
     const unsub = onSnapshot(q, (snap) => {
@@ -178,6 +212,16 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
     await setDoc(doc(db, "users", user.uid, "tracker", vakId), { streefCijfer: val }, { merge: true });
   }
 
+  // ── STAP 4A: Update zwakeDomeinen aggregate on tracker doc ────────────────
+  async function updateZwakeDomeinenAggregate(nieuwZwak: string[]) {
+    if (!user || !db || nieuwZwak.length === 0) return;
+    const trackerRef = doc(db, "users", user.uid, "tracker", vakId);
+    const snap = await getDoc(trackerRef);
+    const bestaand: string[] = snap.exists() ? (snap.data().zwakeDomeinen ?? []) : [];
+    const merged = Array.from(new Set([...bestaand, ...nieuwZwak]));
+    await setDoc(trackerRef, { zwakeDomeinen: merged }, { merge: true });
+  }
+
   // ── Add examen ────────────────────────────────────────────────────────────
   async function handleAdd() {
     if (!user || !db) return;
@@ -189,10 +233,13 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
       jaar: parseInt(fJaar),
       tijdvak: fTijdvak,
       zwakeDomeinen: fZwak,
+      zwakPuntOmschrijving: fZwakOmschrijving || null,
       notities: fNotities || null,
       vakId,
       aangemaakt: new Date().toISOString(),
     });
+    // STAP 4A: update aggregate
+    await updateZwakeDomeinenAggregate(fZwak);
     setSaving(false);
     setModalOpen(false);
     // Reset form
@@ -201,6 +248,7 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
     setFJaar("2024");
     setFTijdvak("I");
     setFZwak([]);
+    setFZwakOmschrijving("");
     setFNotities("");
   }
 
@@ -225,7 +273,7 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
     zwak: e.zwakeDomeinen,
   }));
 
-  // Trend: compare first half average with second half
+  // Trend
   const trend = useMemo(() => {
     if (examens.length < 2) return "neutral";
     const mid = Math.floor(examens.length / 2);
@@ -234,7 +282,7 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
     return secondHalf > firstHalf ? "up" : secondHalf < firstHalf ? "down" : "neutral";
   }, [examens]);
 
-  // Zwakke domeinen tellen
+  // Zwakke domeinen tellen (now includes subdomein IDs too)
   const zwakTelling = useMemo(() => {
     const map: Record<string, number> = {};
     for (const ex of examens) {
@@ -247,7 +295,20 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
 
   const maxZwak = zwakTelling.length ? zwakTelling[0][1] : 1;
 
-  // Domeinen lookup
+  // Domeinen + subdomeinen lookup (combined)
+  const labelMap = useMemo(() => {
+    if (!syllabus) return {};
+    const m: Record<string, string> = {};
+    for (const d of syllabus.domeinen) {
+      m[d.id] = domeinLabel(d);
+      for (const s of d.subdomeinen) {
+        m[s.id] = subdomeinLabel(s);
+      }
+    }
+    return m;
+  }, [syllabus]);
+
+  // Domeinen lookup (for focus section)
   const domeinenMap = useMemo(() => {
     if (!syllabus) return {};
     const m: Record<string, Domein> = {};
@@ -256,6 +317,23 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
     }
     return m;
   }, [syllabus]);
+
+  // Find parent domein for a subdomein ID
+  const subToDomeinMap = useMemo(() => {
+    if (!syllabus) return {};
+    const m: Record<string, Domein> = {};
+    for (const d of syllabus.domeinen) {
+      for (const s of d.subdomeinen) {
+        m[s.id] = d;
+      }
+    }
+    return m;
+  }, [syllabus]);
+
+  // For focus section: resolve ID → Domein (could be domein or subdomein's parent)
+  function resolveDomein(id: string): Domein | undefined {
+    return domeinenMap[id] ?? subToDomeinMap[id];
+  }
 
   // ── Loading / not found ───────────────────────────────────────────────────
   if (!vak)
@@ -282,13 +360,12 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
       </div>
     );
 
-  // alleExamensSlug → url
-  const alleExamensUrl = `https://www.alleexamens.nl/${niveau.toLowerCase()}/${vak.alleExamensSlug}`;
+  // STAP 7: Use lookup map with fallback
+  const alleExamensUrl = ALLE_EXAMENS_URLS[vakId] ?? `https://www.alleexamens.nl/${niveau.toLowerCase()}/${vak.alleExamensSlug}`;
 
   return (
     <>
       <div className="min-h-screen" style={{ background: "#F8F9FC" }}>
-        {/* ── Navbar ─────────────────────────────────────────────────────── */}
         <Navbar>
           <Link href={`/vak/${vakId}`} className="btn-secondary text-xs flex items-center gap-1.5">
             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -323,10 +400,7 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
                 className="flex items-center gap-3 p-4 rounded-xl transition-colors"
                 style={{ border: "1px solid #E8ECF0", background: "white" }}
               >
-                <div
-                  className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{ background: "#EFF6FF" }}
-                >
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "#EFF6FF" }}>
                   <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#2563EB" strokeWidth="2">
                     <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
@@ -336,7 +410,6 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
                   <p className="text-xs" style={{ color: "#64748B" }}>alleexamens.nl</p>
                 </div>
               </a>
-
               <a
                 href="https://www.examen-centraal.nl"
                 target="_blank"
@@ -344,10 +417,7 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
                 className="flex items-center gap-3 p-4 rounded-xl transition-colors"
                 style={{ border: "1px solid #E8ECF0", background: "white" }}
               >
-                <div
-                  className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{ background: "#F0FDF4" }}
-                >
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "#F0FDF4" }}>
                   <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#16A34A" strokeWidth="2">
                     <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
@@ -393,7 +463,7 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
                     contentStyle={{ borderRadius: 10, border: "1px solid #E8ECF0", fontSize: 13 }}
                     formatter={(value: number, _name: string, props: { payload?: { zwak?: string[] } }) => {
                       const zwak = props.payload?.zwak ?? [];
-                      const zwakLabels = zwak.map((id) => domeinenMap[id] ? domeinLabel(domeinenMap[id]) : id);
+                      const zwakLabels = zwak.map((id) => labelMap[id] ?? id);
                       return [
                         <span key="v">
                           {value}
@@ -444,10 +514,7 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
                 color: verschil !== null ? (verschil >= 0 ? "#16A34A" : "#DC2626") : "#64748B",
               },
             ].map((s) => (
-              <div
-                key={s.label}
-                className="card flex flex-col items-center justify-center py-4"
-              >
+              <div key={s.label} className="card flex flex-col items-center justify-center py-4">
                 <p className="text-xs mb-1" style={{ color: "#64748B" }}>{s.label}</p>
                 <p className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</p>
               </div>
@@ -460,34 +527,21 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
               <p className="label mb-4">Zwakke punten analyse</p>
               <div className="space-y-3">
                 {zwakTelling.map(([domId, count]) => {
-                  const dom = domeinenMap[domId];
-                  const label = dom ? domeinLabel(dom) : domId;
+                  const label = labelMap[domId] ?? domId;
                   const pct = Math.round((count / maxZwak) * 100);
                   return (
                     <div key={domId}>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm" style={{ color: "#0F172A" }}>{label}</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs" style={{ color: "#64748B" }}>{count}×</span>
-                          <Link
-                            href={`/vak/${vakId}#${domId}`}
-                            className="text-xs font-medium"
-                            style={{ color: "#2563EB" }}
-                          >
+                          <span className="text-xs" style={{ color: "#64748B" }}>{count}x</span>
+                          <Link href={`/vak/${vakId}#${domId}`} className="text-xs font-medium" style={{ color: "#2563EB" }}>
                             → Bekijk leerdoelen
                           </Link>
                         </div>
                       </div>
                       <div style={{ height: 6, background: "#F1F5F9", borderRadius: 3 }}>
-                        <div
-                          style={{
-                            height: 6,
-                            width: `${pct}%`,
-                            background: "#2563EB",
-                            borderRadius: 3,
-                            transition: "width 0.3s",
-                          }}
-                        />
+                        <div style={{ height: 6, width: `${pct}%`, background: "#2563EB", borderRadius: 3, transition: "width 0.3s" }} />
                       </div>
                     </div>
                   );
@@ -510,10 +564,7 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
             <div className="space-y-3 mb-8">
               <p className="label mb-2">Oefenexamens</p>
               {[...examens].reverse().map((ex) => (
-                <div
-                  key={ex.id}
-                  className="card flex items-start gap-4"
-                >
+                <div key={ex.id} className="card flex items-start gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-sm font-medium" style={{ color: "#0F172A" }}>
@@ -531,10 +582,16 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
                             className="text-xs px-2 py-0.5 rounded-full"
                             style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA" }}
                           >
-                            {domeinenMap[did] ? domeinLabel(domeinenMap[did]) : did}
+                            {labelMap[did] ?? did}
                           </span>
                         ))}
                       </div>
+                    )}
+                    {/* STAP 6: Toon zwakPuntOmschrijving */}
+                    {ex.zwakPuntOmschrijving && (
+                      <p className="text-xs mt-1" style={{ color: "#94A3B8", fontStyle: "italic" }}>
+                        {ex.zwakPuntOmschrijving}
+                      </p>
                     )}
                     {ex.notities && (
                       <p className="text-xs mt-1" style={{ color: "#94A3B8" }}>
@@ -572,7 +629,7 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
               <p className="label mb-4">Focus op deze leerdoelen</p>
               <div className="space-y-5">
                 {zwakTelling.slice(0, 3).map(([domId]) => {
-                  const dom = domeinenMap[domId];
+                  const dom = resolveDomein(domId);
                   if (!dom) return null;
                   const allLeerdoelen = dom.subdomeinen.flatMap((s) => s.leerdoelen);
                   const eerste3 = allLeerdoelen.slice(0, 3);
@@ -582,11 +639,7 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
                         <p className="text-sm font-medium" style={{ color: "#0F172A" }}>
                           {domeinLabel(dom)}
                         </p>
-                        <Link
-                          href={`/vak/${vakId}#${domId}`}
-                          className="text-xs font-medium"
-                          style={{ color: "#2563EB" }}
-                        >
+                        <Link href={`/vak/${vakId}#${dom.id}`} className="text-xs font-medium" style={{ color: "#2563EB" }}>
                           Ga naar vak →
                         </Link>
                       </div>
@@ -666,7 +719,7 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
                   />
                 </div>
 
-                {/* Examenjaar + Tijdvak */}
+                {/* STAP 1: Examenjaar 2000-2025 + Tijdvak */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-medium mb-1 block" style={{ color: "#64748B" }}>Examenjaar</label>
@@ -676,7 +729,7 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
                       className="w-full rounded-lg text-sm p-2.5"
                       style={{ border: "1px solid #E8ECF0", color: "#0F172A" }}
                     >
-                      {[2024, 2023, 2022, 2021, 2020].map((j) => (
+                      {EXAMENJAREN.map((j) => (
                         <option key={j} value={j}>{j}</option>
                       ))}
                     </select>
@@ -695,38 +748,64 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
                   </div>
                 </div>
 
-                {/* Zwakke domeinen */}
+                {/* STAP 2: Zwakke domeinen met subdomeinen */}
                 {syllabus && (
                   <div>
                     <label className="text-xs font-medium mb-2 block" style={{ color: "#64748B" }}>
-                      Zwakke domeinen
+                      Zwakke domeinen / subdomeinen
                     </label>
-                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                      {syllabus.domeinen.map((dom) => {
-                        const checked = fZwak.includes(dom.id);
-                        return (
-                          <label
-                            key={dom.id}
-                            className="flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition-colors text-sm"
-                            style={{ background: checked ? "#EFF6FF" : "transparent" }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() =>
-                                setFZwak((prev) =>
-                                  checked ? prev.filter((id) => id !== dom.id) : [...prev, dom.id]
-                                )
-                              }
-                              style={{ accentColor: "#2563EB" }}
-                            />
-                            <span style={{ color: "#0F172A" }}>{domeinLabel(dom)}</span>
-                          </label>
-                        );
-                      })}
+                    <div className="max-h-56 overflow-y-auto" style={{ border: "1px solid #E8ECF0", borderRadius: 10, padding: 8 }}>
+                      {syllabus.domeinen.map((dom) => (
+                        <div key={dom.id} className="mb-2">
+                          {/* Domein header */}
+                          <p className="text-xs font-bold px-2 py-1.5" style={{ color: "#64748B" }}>
+                            {domeinLabel(dom)}
+                          </p>
+                          {/* Subdomeinen als checkboxes */}
+                          <div className="space-y-0.5 pl-2">
+                            {dom.subdomeinen.map((sub) => {
+                              const checked = fZwak.includes(sub.id);
+                              return (
+                                <label
+                                  key={sub.id}
+                                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors text-sm"
+                                  style={{ background: checked ? "#EFF6FF" : "transparent" }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() =>
+                                      setFZwak((prev) =>
+                                        checked ? prev.filter((id) => id !== sub.id) : [...prev, sub.id]
+                                      )
+                                    }
+                                    style={{ accentColor: "#2563EB" }}
+                                  />
+                                  <span style={{ color: "#0F172A", fontSize: 13 }}>{subdomeinLabel(sub)}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
+
+                {/* STAP 3: Wat ging er precies fout? */}
+                <div>
+                  <label className="text-xs font-medium mb-1 block" style={{ color: "#64748B" }}>
+                    Wat ging er precies fout?
+                  </label>
+                  <textarea
+                    value={fZwakOmschrijving}
+                    onChange={(e) => setFZwakOmschrijving(e.target.value)}
+                    rows={2}
+                    placeholder="Bijv. ik begreep de hefboomwerking niet, moeite met break-even berekening..."
+                    className="w-full rounded-lg text-sm p-2.5 resize-none"
+                    style={{ border: "1px solid #E8ECF0", color: "#0F172A" }}
+                  />
+                </div>
 
                 {/* Notities */}
                 <div>
@@ -748,10 +827,7 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
                   onClick={handleAdd}
                   disabled={saving}
                   className="w-full py-3 rounded-xl text-sm font-semibold transition-colors"
-                  style={{
-                    background: saving ? "#94A3B8" : "#2563EB",
-                    color: "white",
-                  }}
+                  style={{ background: saving ? "#94A3B8" : "#2563EB", color: "white" }}
                 >
                   {saving ? "Opslaan..." : "Opslaan"}
                 </button>

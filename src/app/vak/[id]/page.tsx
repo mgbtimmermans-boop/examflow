@@ -14,6 +14,8 @@ import Link from "next/link";
 import { daysLabel, telLeerdoelen } from "@/lib/helpers";
 import { useDaysLeft } from "@/hooks/useDaysLeft";
 import { Onderwijsniveau, Profiel } from "@/types";
+import { db } from "@/lib/firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { SlaapAdviesKaart, VoedingsTipKaart } from "@/components/BioSync";
 import { useAgenda } from "@/hooks/useAgenda";
 import SessieModal from "@/components/Agenda/SessieModal";
@@ -107,6 +109,19 @@ export default function VakDetailPage({ params }: { params: Promise<{ id: string
   const [formuleOpen, setFormuleOpen] = useState(false);
   const [openBegrip, setOpenBegrip] = useState<string | null>(null);
   const [opfrissLeerdoel, setOpfrissLeerdoel] = useState<Leerdoel | null>(null);
+  const [zwakeDomeinIds, setZwakeDomeinIds] = useState<string[]>([]);
+
+  // STAP 4B: Load zwakeDomeinen from tracker doc
+  useEffect(() => {
+    if (!user || !db) return;
+    const trackerRef = doc(db, "users", user.uid, "tracker", id);
+    getDoc(trackerRef).then((snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.zwakeDomeinen) setZwakeDomeinIds(data.zwakeDomeinen);
+      }
+    });
+  }, [user, id]);
 
   function getVraagVoorItem(vakId: string, syllabusItem: string): ExamenVraag | null {
     return EXAMEN_VRAGEN.find(v => v.vakId === vakId && v.syllabusItem === syllabusItem) ?? null;
@@ -139,15 +154,62 @@ export default function VakDetailPage({ params }: { params: Promise<{ id: string
         if (subNaam.includes("vaardigheden") || leerdoel.id.toLowerCase().startsWith("a")) return;
         if (isNuGecheckt) {
           if (vak.id === "bedrijfseconomie-vwo" || vak.id === "bedrijfseconomie-havo") {
+            // STAP 5: still check zwakeDomeinen removal for bedrijfseconomie
+            await checkAndRemoveZwakDomein(domein.id, sub.id);
             return;
           }
           await voegHerhaalItemToe(leerdoel.id, vak.id, vak.naam, leerdoel.omschrijving);
+          // STAP 5: Check if all leerdoelen in this subdomein/domein are done
+          await checkAndRemoveZwakDomein(domein.id, sub.id);
         } else {
           await verwijderHerhaalItem(leerdoel.id, vak.id);
         }
         return;
       }
     }
+  }
+
+  // STAP 5: Remove domein/subdomein from zwakeDomeinen if all leerdoelen are checked
+  async function checkAndRemoveZwakDomein(domeinId: string, subdomeinId: string) {
+    if (!user || !db || !vakSyllabus) return;
+    const idsToCheck = [domeinId, subdomeinId];
+    const relevant = idsToCheck.filter(id => zwakeDomeinIds.includes(id));
+    if (relevant.length === 0) return;
+
+    // Build updated voortgang (include the just-toggled item)
+    const updatedVoortgang = { ...syllabusVoortgang };
+
+    const toRemove: string[] = [];
+    for (const checkId of relevant) {
+      let allDone = false;
+      if (checkId === domeinId) {
+        // Check all leerdoelen in entire domein
+        const domein = vakSyllabus.domeinen.find(d => d.id === domeinId);
+        if (domein) {
+          const allIds = domein.subdomeinen.flatMap(s => s.leerdoelen.map(l => l.id));
+          allDone = allIds.every(lid => updatedVoortgang[lid] || !syllabusVoortgang[lid] && updatedVoortgang[lid] !== false);
+          // More accurate: check with the toggle applied
+          allDone = allIds.every(lid => {
+            // The just-toggled one is now checked (isNuGecheckt was true to get here)
+            return syllabusVoortgang[lid] || false;
+          });
+        }
+      } else {
+        // Check all leerdoelen in subdomein
+        const domein = vakSyllabus.domeinen.find(d => d.id === domeinId);
+        const sub = domein?.subdomeinen.find(s => s.id === subdomeinId);
+        if (sub) {
+          allDone = sub.leerdoelen.every(l => syllabusVoortgang[l.id] || false);
+        }
+      }
+      if (allDone) toRemove.push(checkId);
+    }
+
+    if (toRemove.length === 0) return;
+    const newList = zwakeDomeinIds.filter(id => !toRemove.includes(id));
+    setZwakeDomeinIds(newList);
+    const trackerRef = doc(db, "users", user.uid, "tracker", id);
+    await setDoc(trackerRef, { zwakeDomeinen: newList }, { merge: true });
   }
 
   const vakFormules = FORMULES.find(f => f.vakId === id)?.formules ?? []
@@ -254,6 +316,18 @@ export default function VakDetailPage({ params }: { params: Promise<{ id: string
           );
         })()}
 
+        {/* STAP 4D: Zwakke punten banner */}
+        {zwakeDomeinIds.length > 0 && !vak.isSchoolexamen && (
+          <div style={{ background: "#FEF2F2", borderBottom: "1px solid #FECACA", padding: "10px 24px" }}>
+            <p style={{ fontSize: 13, color: "#DC2626", textAlign: "center" }}>
+              Je hebt {zwakeDomeinIds.length} zwakke {zwakeDomeinIds.length === 1 ? "domein" : "domeinen"} op basis van je oefenexamens. Bekijk de gemarkeerde leerdoelen.{" "}
+              <Link href={`/tracker/${id}`} style={{ fontWeight: 600, textDecoration: "underline" }}>
+                → Ga naar tracker
+              </Link>
+            </p>
+          </div>
+        )}
+
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
             <div>
@@ -332,6 +406,7 @@ export default function VakDetailPage({ params }: { params: Promise<{ id: string
                     heeftVraag={heeftVraagVoorLeerdoel}
                     pctVoltooid={pctVoltooid}
                     onBegripClick={(begrip) => { setOpenBegrip(begrip); setFormuleOpen(true); }}
+                    zwakeDomeinIds={zwakeDomeinIds}
                   />
                 </div>
               ) : (

@@ -11,6 +11,7 @@ interface SyllabusTreeProps {
   heeftVraag?: (leerdoelId: string) => boolean;
   pctVoltooid: (ids: string[]) => number;
   onBegripClick?: (begrip: string) => void;
+  zwakeDomeinIds?: string[];
 }
 
 function getAllLeerdoelIds(domein: Domein): string[] {
@@ -95,6 +96,7 @@ function LeerdoelRij({
   onToggle,
   onOefen,
   onBegripClick,
+  isZwak,
 }: {
   leerdoel: Leerdoel;
   checked: boolean;
@@ -102,6 +104,7 @@ function LeerdoelRij({
   onToggle: (id: string) => void;
   onOefen?: (leerdoel: Leerdoel) => void;
   onBegripClick?: (begrip: string) => void;
+  isZwak?: boolean;
 }) {
   const [uitgeklapt, setUitgeklapt] = useState(false);
   const heeftExtra =
@@ -113,7 +116,8 @@ function LeerdoelRij({
   return (
     <div style={{
       borderBottom: "1px solid #F1F5F9",
-      background: checked ? "#FAFFFE" : "#FFFFFF",
+      background: checked ? "#FAFFFE" : isZwak && !checked ? "#FFFBFB" : "#FFFFFF",
+      borderLeft: isZwak && !checked ? "3px solid #DC2626" : "3px solid transparent",
       transition: "background 0.2s",
     }}>
       {/* ── Hoofdrij ── */}
@@ -152,6 +156,17 @@ function LeerdoelRij({
         >
           {korteTitel(leerdoel.omschrijving)}
         </span>
+
+        {/* Zwak punt pill */}
+        {isZwak && !checked && (
+          <span style={{
+            fontSize: 10, padding: "1px 6px", borderRadius: 20,
+            background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA",
+            flexShrink: 0, whiteSpace: "nowrap", fontWeight: 500,
+          }}>
+            Zwak punt
+          </span>
+        )}
 
         {/* Uitklap knop */}
         {heeftExtra && (
@@ -272,7 +287,8 @@ function LeerdoelRij({
 
 // ─── SyllabusTree ─────────────────────────────────────────────────────────
 
-export default function SyllabusTree({ syllabus, voortgang, onToggle, onOefen, heeftVraag, pctVoltooid, onBegripClick }: SyllabusTreeProps) {
+export default function SyllabusTree({ syllabus, voortgang, onToggle, onOefen, heeftVraag, pctVoltooid, onBegripClick, zwakeDomeinIds }: SyllabusTreeProps) {
+  const zwakSet = new Set(zwakeDomeinIds ?? []);
   const [openDomeinen, setOpenDomeinen] = useState<Record<string, boolean>>(() =>
     syllabus.domeinen.reduce((acc, d) => ({ ...acc, [d.id]: true }), {} as Record<string, boolean>)
   );
@@ -407,6 +423,7 @@ export default function SyllabusTree({ syllabus, voortgang, onToggle, onOefen, h
                                     onToggle={onToggle}
                                     onOefen={onOefen}
                                     onBegripClick={onBegripClick}
+                                    isZwak={zwakSet.has(domein.id) || zwakSet.has(sub.id)}
                                   />
                                 ))}
                               </motion.div>
