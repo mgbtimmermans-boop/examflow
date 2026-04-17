@@ -382,6 +382,17 @@ const features = [
       </svg>
     ),
   },
+  {
+    title: "Bio-Sync",
+    desc: "Slaapadvies op basis van je examenrooster. ExamFlow berekent wanneer je naar bed moet voor optimale herstelcycli voor je examen.",
+    color: "#6D28D9",
+    bg: "#F5F3FF",
+    icon: (
+      <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+        <path d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    ),
+  },
 ];
 
 const testimonials = [
@@ -632,7 +643,7 @@ export default function Home() {
             <p style={{ fontSize: 13, fontWeight: 700, color: "#2563EB", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Functionaliteiten</p>
             <h2 style={{ fontSize: 28, fontWeight: 700, color: "#0F172A" }}>Alles wat je nodig hebt</h2>
           </motion.div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid sm:grid-cols-2 gap-5">
             {features.map((f, i) => (
               <motion.div
                 key={i}
