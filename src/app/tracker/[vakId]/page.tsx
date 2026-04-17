@@ -390,15 +390,24 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
     return uur < 24;
   });
 
-  async function puntenAfvinken(punt: string) {
+  async function togglePuntAfgevinkt(punt: string) {
     if (!user || !db) return;
-    const nu = new Date().toISOString();
     const docId = btoa(encodeURIComponent(punt));
-    await setDoc(doc(db, "users", user.uid, "tracker", vakId, "geoefendePunten", docId), {
-      punt,
-      afgevinktOp: nu,
-    }, { merge: true });
-    setGeoefendePunten((prev) => ({ ...prev, [punt]: nu }));
+    if (isRecentAfgevinkt(punt)) {
+      await deleteDoc(doc(db, "users", user.uid, "tracker", vakId, "geoefendePunten", docId));
+      setGeoefendePunten((prev) => {
+        const nieuw = { ...prev };
+        delete nieuw[punt];
+        return nieuw;
+      });
+    } else {
+      const nu = new Date().toISOString();
+      await setDoc(doc(db, "users", user.uid, "tracker", vakId, "geoefendePunten", docId), {
+        punt,
+        afgevinktOp: nu,
+      }, { merge: true });
+      setGeoefendePunten((prev) => ({ ...prev, [punt]: nu }));
+    }
   }
 
   // ── Loading / not found ───────────────────────────────────────────────────
@@ -634,7 +643,7 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
                   return (
                     <div
                       key={punt}
-                      onClick={() => !afgevinkt && puntenAfvinken(punt)}
+                      onClick={() => togglePuntAfgevinkt(punt)}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors"
                       style={{ background: afgevinkt ? "#F0FDF4" : "white", border: "1px solid #E8ECF0" }}
                     >
