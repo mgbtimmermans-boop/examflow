@@ -276,6 +276,7 @@ function LeerdoelRij({
 
 export default function SyllabusTree({ syllabus, voortgang, onToggle, onOefen, heeftVraag, pctVoltooid, onBegripClick, zwakeDomeinIds, vakId }: SyllabusTreeProps) {
   const zwakSet = new Set(zwakeDomeinIds ?? []);
+  const [weggeklikteDomeinen, setWeggeklikteDomeinen] = useState<string[]>([]);
   const [openDomeinen, setOpenDomeinen] = useState<Record<string, boolean>>(() =>
     syllabus.domeinen.reduce((acc, d) => ({ ...acc, [d.id]: true }), {} as Record<string, boolean>)
   );
@@ -323,7 +324,7 @@ export default function SyllabusTree({ syllabus, voortgang, onToggle, onOefen, h
                 </span>
                 <span style={{ fontSize: 15, fontWeight: 600, color: "#0F172A", textAlign: "left" }}>
                   {domeinNaam || (domein.naam ?? domein.titel ?? "")}
-                  {zwakSet.has(domein.id) && <span style={{ fontSize: 12, color: "#F59E0B", marginLeft: 6 }}>&#9888;</span>}
+                  {zwakSet.has(domein.id) && !weggeklikteDomeinen.includes(domein.id) && domeinPct < 100 && <span style={{ fontSize: 12, color: "#F59E0B", marginLeft: 6 }}>&#9888;</span>}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
@@ -343,7 +344,7 @@ export default function SyllabusTree({ syllabus, voortgang, onToggle, onOefen, h
                   style={{ overflow: "hidden" }}
                 >
                   <div style={{ padding: 8 }}>
-                    {(zwakSet.has(domein.id) || domein.subdomeinen.some(s => zwakSet.has(s.id))) && (
+                    {(zwakSet.has(domein.id) || domein.subdomeinen.some(s => zwakSet.has(s.id))) && !weggeklikteDomeinen.includes(domein.id) && domeinPct < 100 && (
                       <div style={{
                         background: "#FFFBEB",
                         border: "1px solid #FDE68A",
@@ -354,12 +355,17 @@ export default function SyllabusTree({ syllabus, voortgang, onToggle, onOefen, h
                         marginBottom: 10,
                         display: "flex",
                         alignItems: "center",
-                        gap: 6,
+                        justifyContent: "space-between",
                       }}>
-                        <span>&#9888;</span>
-                        <span>Dit domein was zwak in je laatste oefenexamen.{" "}
+                        <span>&#9888; Dit domein was zwak in je laatste oefenexamen.{" "}
                           {vakId && <a href={`/tracker/${vakId}`} style={{ color: "#2563EB", textDecoration: "none" }}>Bekijk je tracker →</a>}
                         </span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setWeggeklikteDomeinen(prev => [...prev, domein.id]); }}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "#92400E", fontSize: 18, padding: "0 4px", lineHeight: 1 }}
+                        >
+                          ×
+                        </button>
                       </div>
                     )}
                     {domein.subdomeinen.map(sub => {
@@ -400,7 +406,7 @@ export default function SyllabusTree({ syllabus, voortgang, onToggle, onOefen, h
                               </span>
                               <span style={{ fontSize: 13, fontWeight: 500, color: "#374151", textAlign: "left" }}>
                                 {subNaam || (sub.naam ?? sub.titel ?? "")}
-                                {zwakSet.has(sub.id) && <span style={{ fontSize: 12, color: "#F59E0B", marginLeft: 6 }}>&#9888;</span>}
+                                {zwakSet.has(sub.id) && !weggeklikteDomeinen.includes(sub.id) && subPct < 100 && <span style={{ fontSize: 12, color: "#F59E0B", marginLeft: 6 }}>&#9888;</span>}
                               </span>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
