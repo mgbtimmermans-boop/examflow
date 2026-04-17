@@ -12,6 +12,8 @@ interface SyllabusTreeProps {
   pctVoltooid: (ids: string[]) => number;
   onBegripClick?: (begrip: string) => void;
   zwakeDomeinIds?: string[];
+  weggeklikteDomeinIds?: string[];
+  onDomeinWegklikken?: (domeinId: string) => void;
   vakId?: string;
 }
 
@@ -274,9 +276,9 @@ function LeerdoelRij({
 
 // ─── SyllabusTree ─────────────────────────────────────────────────────────
 
-export default function SyllabusTree({ syllabus, voortgang, onToggle, onOefen, heeftVraag, pctVoltooid, onBegripClick, zwakeDomeinIds, vakId }: SyllabusTreeProps) {
+export default function SyllabusTree({ syllabus, voortgang, onToggle, onOefen, heeftVraag, pctVoltooid, onBegripClick, zwakeDomeinIds, weggeklikteDomeinIds, onDomeinWegklikken, vakId }: SyllabusTreeProps) {
   const zwakSet = new Set(zwakeDomeinIds ?? []);
-  const [weggeklikteDomeinen, setWeggeklikteDomeinen] = useState<string[]>([]);
+  const weggeklikteDomeinen = weggeklikteDomeinIds ?? [];
   const [openDomeinen, setOpenDomeinen] = useState<Record<string, boolean>>(() =>
     syllabus.domeinen.reduce((acc, d) => ({ ...acc, [d.id]: true }), {} as Record<string, boolean>)
   );
@@ -361,7 +363,7 @@ export default function SyllabusTree({ syllabus, voortgang, onToggle, onOefen, h
                           {vakId && <a href={`/tracker/${vakId}`} style={{ color: "#2563EB", textDecoration: "none" }}>Bekijk je tracker →</a>}
                         </span>
                         <button
-                          onClick={(e) => { e.stopPropagation(); setWeggeklikteDomeinen(prev => [...prev, domein.id]); }}
+                          onClick={(e) => { e.stopPropagation(); onDomeinWegklikken?.(domein.id); }}
                           style={{ background: "none", border: "none", cursor: "pointer", color: "#92400E", fontSize: 18, padding: "0 4px", lineHeight: 1 }}
                         >
                           ×

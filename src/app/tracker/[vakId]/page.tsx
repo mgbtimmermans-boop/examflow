@@ -231,14 +231,17 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
     await setDoc(doc(db, "users", user.uid, "tracker", vakId), { streefCijfer: val }, { merge: true });
   }
 
-  // ── STAP 4A: Update zwakeDomeinen aggregate on tracker doc ────────────────
+  // ── Update zwakeDomeinen aggregate + clean weggeklikteDomeinen ────────────
   async function updateZwakeDomeinenAggregate(nieuwZwak: string[]) {
     if (!user || !db || nieuwZwak.length === 0) return;
     const trackerRef = doc(db, "users", user.uid, "tracker", vakId);
     const snap = await getDoc(trackerRef);
     const bestaand: string[] = snap.exists() ? (snap.data().zwakeDomeinen ?? []) : [];
+    const weggeklikt: string[] = snap.exists() ? (snap.data().weggeklikteDomeinen ?? []) : [];
     const merged = Array.from(new Set([...bestaand, ...nieuwZwak]));
-    await setDoc(trackerRef, { zwakeDomeinen: merged }, { merge: true });
+    // Verwijder uit weggeklikteDomeinen als domein opnieuw als zwak is aangemerkt
+    const nieuweWeggeklikt = weggeklikt.filter((d: string) => !nieuwZwak.includes(d));
+    await setDoc(trackerRef, { zwakeDomeinen: merged, weggeklikteDomeinen: nieuweWeggeklikt }, { merge: true });
   }
 
   // ── Add examen ────────────────────────────────────────────────────────────
@@ -285,8 +288,13 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
       ? []
       : [...new Set(resterendeExamens.flatMap((e) => e.zwakeDomeinen ?? []))];
 
+    // Herbereken weggeklikteDomeinen — verwijder domeinen die niet meer zwak zijn
+    const trackerSnap = await getDoc(doc(db, "users", user.uid, "tracker", vakId));
+    const huidigeWeggeklikt: string[] = trackerSnap.exists() ? (trackerSnap.data().weggeklikteDomeinen ?? []) : [];
+    const nieuweWeggeklikt = huidigeWeggeklikt.filter((d) => nieuweZwakeDomeinen.includes(d));
+
     // Update Firestore
-    await setDoc(doc(db, "users", user.uid, "tracker", vakId), { zwakeDomeinen: nieuweZwakeDomeinen }, { merge: true });
+    await setDoc(doc(db, "users", user.uid, "tracker", vakId), { zwakeDomeinen: nieuweZwakeDomeinen, weggeklikteDomeinen: nieuweWeggeklikt }, { merge: true });
   }
 
   // ── Computed ──────────────────────────────────────────────────────────────

@@ -15,7 +15,7 @@ import { daysLabel, telLeerdoelen } from "@/lib/helpers";
 import { useDaysLeft } from "@/hooks/useDaysLeft";
 import { Onderwijsniveau, Profiel } from "@/types";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { SlaapAdviesKaart, VoedingsTipKaart } from "@/components/BioSync";
 import { useAgenda } from "@/hooks/useAgenda";
 import SessieModal from "@/components/Agenda/SessieModal";
@@ -110,18 +110,27 @@ export default function VakDetailPage({ params }: { params: Promise<{ id: string
   const [openBegrip, setOpenBegrip] = useState<string | null>(null);
   const [opfrissLeerdoel, setOpfrissLeerdoel] = useState<Leerdoel | null>(null);
   const [zwakeDomeinIds, setZwakeDomeinIds] = useState<string[]>([]);
+  const [weggeklikteDomeinIds, setWeggeklikteDomeinIds] = useState<string[]>([]);
 
-  // STAP 4B: Load zwakeDomeinen from tracker doc
+  // Load zwakeDomeinen + weggeklikteDomeinen from tracker doc (realtime)
   useEffect(() => {
     if (!user || !db) return;
     const trackerRef = doc(db, "users", user.uid, "tracker", id);
-    getDoc(trackerRef).then((snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        if (data.zwakeDomeinen) setZwakeDomeinIds(data.zwakeDomeinen);
-      }
+    const unsub = onSnapshot(trackerRef, (snap) => {
+      const data = snap.data();
+      setZwakeDomeinIds(data?.zwakeDomeinen ?? []);
+      setWeggeklikteDomeinIds(data?.weggeklikteDomeinen ?? []);
     });
+    return unsub;
   }, [user, id]);
+
+  async function klikWegDomein(domeinId: string) {
+    if (!user || !db) return;
+    const nieuweWeggeklikt = [...weggeklikteDomeinIds, domeinId];
+    const trackerRef = doc(db, "users", user.uid, "tracker", id);
+    await setDoc(trackerRef, { weggeklikteDomeinen: nieuweWeggeklikt }, { merge: true });
+    setWeggeklikteDomeinIds(nieuweWeggeklikt);
+  }
 
   function getVraagVoorItem(vakId: string, syllabusItem: string): ExamenVraag | null {
     return EXAMEN_VRAGEN.find(v => v.vakId === vakId && v.syllabusItem === syllabusItem) ?? null;
@@ -395,6 +404,8 @@ export default function VakDetailPage({ params }: { params: Promise<{ id: string
                     pctVoltooid={pctVoltooid}
                     onBegripClick={(begrip) => { setOpenBegrip(begrip); setFormuleOpen(true); }}
                     zwakeDomeinIds={zwakeDomeinIds}
+                    weggeklikteDomeinIds={weggeklikteDomeinIds}
+                    onDomeinWegklikken={klikWegDomein}
                     vakId={id}
                   />
                 </div>
