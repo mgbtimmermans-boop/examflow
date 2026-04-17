@@ -177,6 +177,9 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
   const [fNotities, setFNotities] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Geoefende punten state
+  const [geoefendePunten, setGeoefendePunten] = useState<Record<string, string>>({});
+
   // Redirect if not authed
   useEffect(() => {
     if (!loading && !user) router.replace("/");
@@ -204,6 +207,21 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
       setLoadingData(false);
     });
     return unsub;
+  }, [user, vakId]);
+
+  // ── Load geoefende punten ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user || !db) return;
+    const gpRef = collection(db, "users", user.uid, "tracker", vakId, "geoefendePunten");
+    const unsub2 = onSnapshot(gpRef, (snap) => {
+      const map: Record<string, string> = {};
+      snap.docs.forEach((d) => {
+        const data = d.data();
+        if (data.punt && data.afgevinktOp) map[data.punt] = data.afgevinktOp;
+      });
+      setGeoefendePunten(map);
+    });
+    return unsub2;
   }, [user, vakId]);
 
   // ── Save streefcijfer ─────────────────────────────────────────────────────
@@ -346,6 +364,41 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
   // For focus section: resolve ID → Domein (could be domein or subdomein's parent)
   function resolveDomein(id: string): Domein | undefined {
     return domeinenMap[id] ?? subToDomeinMap[id];
+  }
+
+  // ── Zwakke punten oefenlijst ──────────────────────────────────────────────
+  const allePunten = useMemo(() => {
+    const set = new Set<string>();
+    for (const ex of examens) {
+      for (const p of ex.zwakkePunten ?? []) set.add(p);
+    }
+    return Array.from(set);
+  }, [examens]);
+
+  function isRecentAfgevinkt(punt: string): boolean {
+    const timestamp = geoefendePunten[punt];
+    if (!timestamp) return false;
+    const uur = (Date.now() - new Date(timestamp).getTime()) / (1000 * 60 * 60);
+    return uur < 24;
+  }
+
+  const zichtbarePunten = allePunten.filter((p) => {
+    const timestamp = geoefendePunten[p];
+    if (!timestamp) return true; // niet afgevinkt → tonen
+    // Afgevinkt: alleen tonen als < 24 uur geleden
+    const uur = (Date.now() - new Date(timestamp).getTime()) / (1000 * 60 * 60);
+    return uur < 24;
+  });
+
+  async function puntenAfvinken(punt: string) {
+    if (!user || !db) return;
+    const nu = new Date().toISOString();
+    const docId = btoa(encodeURIComponent(punt));
+    await setDoc(doc(db, "users", user.uid, "tracker", vakId, "geoefendePunten", docId), {
+      punt,
+      afgevinktOp: nu,
+    }, { merge: true });
+    setGeoefendePunten((prev) => ({ ...prev, [punt]: nu }));
   }
 
   // ── Loading / not found ───────────────────────────────────────────────────
@@ -562,6 +615,61 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
               </div>
             </div>
           )}
+
+          {/* ── Zwakke punten oefenlijst ──────────────────────────────── */}
+          <div className="card mb-6">
+            <p className="label mb-3">Zwakke punten — oefen deze</p>
+            {allePunten.length === 0 ? (
+              <p className="text-sm" style={{ color: "#94A3B8" }}>
+                Geen zwakke punten genoteerd. Voeg oefenexamens toe.
+              </p>
+            ) : zichtbarePunten.length === 0 ? (
+              <p className="text-sm" style={{ color: "#16A34A" }}>
+                Alle punten geoefend! Goed bezig.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {zichtbarePunten.map((punt) => {
+                  const afgevinkt = isRecentAfgevinkt(punt);
+                  return (
+                    <div
+                      key={punt}
+                      onClick={() => !afgevinkt && puntenAfvinken(punt)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors"
+                      style={{ background: afgevinkt ? "#F0FDF4" : "white", border: "1px solid #E8ECF0" }}
+                    >
+                      <div
+                        style={{
+                          width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          background: afgevinkt ? "#16A34A" : "white",
+                          border: `1.5px solid ${afgevinkt ? "#16A34A" : "#CBD5E1"}`,
+                        }}
+                      >
+                        {afgevinkt && (
+                          <svg width="10" height="10" fill="none" viewBox="0 0 12 12">
+                            <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </div>
+                      <span
+                        className="text-sm flex-1"
+                        style={{
+                          color: afgevinkt ? "#16A34A" : "#374151",
+                          textDecoration: afgevinkt ? "line-through" : "none",
+                        }}
+                      >
+                        {punt}
+                      </span>
+                      {afgevinkt && (
+                        <span className="text-xs" style={{ color: "#16A34A", flexShrink: 0 }}>Geoefend</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* ── F) TOEVOEGEN KNOP ──────────────────────────────────────── */}
           <button

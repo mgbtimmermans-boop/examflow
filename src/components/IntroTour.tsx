@@ -393,6 +393,101 @@ function AnimatieCijferdoelen() {
   );
 }
 
+function AnimatieTracker() {
+  const [score, setScore] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setScore((s) => (s < 7 ? s + 0.1 : 7)), 50);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div style={{ margin: "8px 0" }}>
+      {/* Mini grafiek */}
+      <div style={{ border: "1px solid #E8ECF0", borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#0F172A" }}>Cijfergrafiek</span>
+          <span style={{ fontSize: 11, color: "#2563EB", fontWeight: 600 }}>{score.toFixed(1)}</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 40 }}>
+          {[5.5, 6.2, 6.8, 7.0].map((s, i) => (
+            <motion.div
+              key={i}
+              initial={{ height: 0 }}
+              animate={{ height: `${(s / 10) * 100}%` }}
+              transition={{ delay: i * 0.15, duration: 0.4 }}
+              style={{
+                flex: 1,
+                borderRadius: "4px 4px 0 0",
+                background: s >= 7 ? "#16A34A" : s >= 6 ? "#2563EB" : "#F59E0B",
+              }}
+            />
+          ))}
+          <motion.div
+            initial={{ height: 0 }}
+            animate={{ height: `${(score / 10) * 100}%` }}
+            transition={{ duration: 0.1 }}
+            style={{ flex: 1, borderRadius: "4px 4px 0 0", background: "#2563EB" }}
+          />
+        </div>
+      </div>
+      {/* Zwakke punten */}
+      <div style={{ border: "1px solid #E8ECF0", borderRadius: 10, overflow: "hidden" }}>
+        <div style={{ padding: "8px 12px", background: "#F8F9FC", borderBottom: "1px solid #E8ECF0" }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#0F172A" }}>Zwakke punten</span>
+        </div>
+        {[
+          { tekst: "Hefboomwerking", klaar: true },
+          { tekst: "Break-even analyse", klaar: false },
+        ].map((p, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.2 + 0.5 }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "7px 12px",
+              borderBottom: i === 0 ? "1px solid #F1F5F9" : "none",
+              background: p.klaar ? "#F0FDF4" : "white",
+            }}
+          >
+            <div
+              style={{
+                width: 14,
+                height: 14,
+                borderRadius: 4,
+                flexShrink: 0,
+                background: p.klaar ? "#16A34A" : "white",
+                border: `1.5px solid ${p.klaar ? "#16A34A" : "#CBD5E1"}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {p.klaar && (
+                <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
+                  <path d="M1 3l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              )}
+            </div>
+            <span
+              style={{
+                fontSize: 11,
+                color: p.klaar ? "#94A3B8" : "#374151",
+                textDecoration: p.klaar ? "line-through" : "none",
+              }}
+            >
+              {p.tekst}
+            </span>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AnimatieKlaar() {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 0" }}>
@@ -456,6 +551,7 @@ const STAPPEN = [
   { target: null, titel: "Formules & Begrippen", tekst: "Op elke vakpagina vind je alle formules en begrippen. Klik op een begrip om direct naar de uitleg te gaan." },
   { target: "biosync-link", titel: "Bio-Sync", tekst: "Slaapadvies op basis van je examenrooster. ExamFlow berekent wanneer je naar bed moet voor optimale herstelcycli." },
   { target: "cijferdoelen-sectie", titel: "Cijferdoelen", tekst: "Stel per vak je doelcijfer in via Instellingen. ExamFlow berekent wat je op het CE nodig hebt op basis van je SE-cijfers." },
+  { target: null, titel: "Examentracker", tekst: "Oefen met echte examens en houd bij wat je hebt gehaald. ExamFlow analyseert je zwakke punten en koppelt ze direct aan de leerdoelen in je syllabus." },
   { target: null, titel: "Klaar om te beginnen!", tekst: "ExamFlow helpt je gestructureerd en slim studeren. Succes met je examens — je kunt dit." },
 ];
 
@@ -469,7 +565,8 @@ const ILLUSTRATIES: Record<number, React.ComponentType> = {
   6: AnimatieFormules,
   7: AnimatieBioSync,
   8: AnimatieCijferdoelen,
-  9: AnimatieKlaar,
+  9: AnimatieTracker,
+  10: AnimatieKlaar,
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
