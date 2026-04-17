@@ -316,18 +316,6 @@ export default function VakDetailPage({ params }: { params: Promise<{ id: string
           );
         })()}
 
-        {/* STAP 4D: Zwakke punten banner */}
-        {zwakeDomeinIds.length > 0 && !vak.isSchoolexamen && (
-          <div style={{ background: "#FEF2F2", borderBottom: "1px solid #FECACA", padding: "10px 24px" }}>
-            <p style={{ fontSize: 13, color: "#DC2626", textAlign: "center" }}>
-              Je hebt {zwakeDomeinIds.length} zwakke {zwakeDomeinIds.length === 1 ? "domein" : "domeinen"} op basis van je oefenexamens. Bekijk de gemarkeerde leerdoelen.{" "}
-              <Link href={`/tracker/${id}`} style={{ fontWeight: 600, textDecoration: "underline" }}>
-                → Ga naar tracker
-              </Link>
-            </p>
-          </div>
-        )}
-
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
             <div>
@@ -407,6 +395,7 @@ export default function VakDetailPage({ params }: { params: Promise<{ id: string
                     pctVoltooid={pctVoltooid}
                     onBegripClick={(begrip) => { setOpenBegrip(begrip); setFormuleOpen(true); }}
                     zwakeDomeinIds={zwakeDomeinIds}
+                    vakId={id}
                   />
                 </div>
               ) : (

@@ -68,7 +68,8 @@ export interface OefenExamen {
   tijdvak: "I" | "II";
   zwakeDomeinen: string[]; // domein ids
   notities?: string;
-  zwakPuntOmschrijving?: string;
+  zwakPuntOmschrijving?: string; // legacy
+  zwakkePunten?: string[];
   vakId: string;
   aangemaakt: string;
 }

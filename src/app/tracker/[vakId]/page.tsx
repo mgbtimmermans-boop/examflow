@@ -172,7 +172,8 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
   const [fJaar, setFJaar] = useState("2024");
   const [fTijdvak, setFTijdvak] = useState<"I" | "II">("I");
   const [fZwak, setFZwak] = useState<string[]>([]);
-  const [fZwakOmschrijving, setFZwakOmschrijving] = useState("");
+  const [zwakkePunten, setZwakkePunten] = useState<string[]>([]);
+  const [nieuwPunt, setNieuwPunt] = useState("");
   const [fNotities, setFNotities] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -233,7 +234,7 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
       jaar: parseInt(fJaar),
       tijdvak: fTijdvak,
       zwakeDomeinen: fZwak,
-      zwakPuntOmschrijving: fZwakOmschrijving || null,
+      zwakkePunten: zwakkePunten.length > 0 ? zwakkePunten : null,
       notities: fNotities || null,
       vakId,
       aangemaakt: new Date().toISOString(),
@@ -248,7 +249,8 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
     setFJaar("2024");
     setFTijdvak("I");
     setFZwak([]);
-    setFZwakOmschrijving("");
+    setZwakkePunten([]);
+    setNieuwPunt("");
     setFNotities("");
   }
 
@@ -587,8 +589,19 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
                         ))}
                       </div>
                     )}
-                    {/* STAP 6: Toon zwakPuntOmschrijving */}
-                    {ex.zwakPuntOmschrijving && (
+                    {/* Zwakke punten bullet list */}
+                    {ex.zwakkePunten && ex.zwakkePunten.length > 0 && (
+                      <div style={{ marginTop: 8 }}>
+                        {ex.zwakkePunten.map((punt, i) => (
+                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                            <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#94A3B8", flexShrink: 0 }} />
+                            <span style={{ fontSize: 12, color: "#64748B" }}>{punt}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Legacy: zwakPuntOmschrijving */}
+                    {!ex.zwakkePunten?.length && ex.zwakPuntOmschrijving && (
                       <p className="text-xs mt-1" style={{ color: "#94A3B8", fontStyle: "italic" }}>
                         {ex.zwakPuntOmschrijving}
                       </p>
@@ -792,19 +805,75 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
                   </div>
                 )}
 
-                {/* STAP 3: Wat ging er precies fout? */}
-                <div>
-                  <label className="text-xs font-medium mb-1 block" style={{ color: "#64748B" }}>
+                {/* Wat ging er precies fout? — dynamische puntenlijst */}
+                <div style={{ marginTop: 16 }}>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 8 }}>
                     Wat ging er precies fout?
                   </label>
-                  <textarea
-                    value={fZwakOmschrijving}
-                    onChange={(e) => setFZwakOmschrijving(e.target.value)}
-                    rows={2}
-                    placeholder="Bijv. ik begreep de hefboomwerking niet, moeite met break-even berekening..."
-                    className="w-full rounded-lg text-sm p-2.5 resize-none"
-                    style={{ border: "1px solid #E8ECF0", color: "#0F172A" }}
-                  />
+                  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                    <input
+                      type="text"
+                      value={nieuwPunt}
+                      onChange={e => setNieuwPunt(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && nieuwPunt.trim()) {
+                          e.preventDefault();
+                          setZwakkePunten(prev => [...prev, nieuwPunt.trim()]);
+                          setNieuwPunt("");
+                        }
+                      }}
+                      placeholder="Bijv. hefboomwerking begreep ik niet..."
+                      style={{
+                        flex: 1, padding: "9px 12px", borderRadius: 8,
+                        border: "1px solid #E8ECF0", fontSize: 13, color: "#0F172A",
+                        outline: "none",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (nieuwPunt.trim()) {
+                          setZwakkePunten(prev => [...prev, nieuwPunt.trim()]);
+                          setNieuwPunt("");
+                        }
+                      }}
+                      style={{
+                        padding: "9px 16px", borderRadius: 8, border: "none",
+                        background: "#2563EB", color: "white", fontSize: 13,
+                        fontWeight: 500, cursor: "pointer",
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                  {zwakkePunten.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {zwakkePunten.map((punt, i) => (
+                        <div key={i} style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          padding: "8px 12px", borderRadius: 8,
+                          background: "#F8F9FC", border: "1px solid #E8ECF0",
+                        }}>
+                          <div style={{
+                            width: 6, height: 6, borderRadius: "50%",
+                            background: "#2563EB", flexShrink: 0,
+                          }} />
+                          <span style={{ flex: 1, fontSize: 13, color: "#374151" }}>{punt}</span>
+                          <button
+                            type="button"
+                            onClick={() => setZwakkePunten(prev => prev.filter((_, j) => j !== i))}
+                            style={{
+                              background: "none", border: "none", cursor: "pointer",
+                              color: "#94A3B8", fontSize: 16, padding: "0 2px",
+                              lineHeight: 1,
+                            }}
+                          >
+                            x
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Notities */}
