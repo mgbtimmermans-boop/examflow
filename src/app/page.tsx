@@ -263,7 +263,6 @@ const stats = [
   { value: "5000+", label: "Oefenvragen" },
   { value: "100%", label: "Syllabus dekking" },
   { value: "Gratis", label: "Geen kosten" },
-  { value: "Tracker", label: "Analyseer zwakke punten" },
 ];
 
 const steps = [
@@ -529,7 +528,7 @@ export default function Home() {
       {/* ── C. Stats ──────────────────────────────────────────────────────── */}
       <AnimatedSection>
         <div className="max-w-4xl mx-auto px-4 sm:px-6" style={{ paddingTop: isMobile ? 24 : 32, paddingBottom: isMobile ? 24 : 32, paddingLeft: isMobile ? 20 : undefined, paddingRight: isMobile ? 20 : undefined, background: "#F8F9FC" }}>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {stats.map((s, i) => (
               <StatCard key={i} value={s.value} label={s.label} index={i} compact={isMobile} />
             ))}
