@@ -60,6 +60,23 @@ export interface AuthUser {
   displayName: string | null;
 }
 
+export interface OefenExamen {
+  id: string;
+  datum: string; // YYYY-MM-DD
+  cijfer: number; // 1-10
+  jaar: number; // examenjaar bijv. 2023
+  tijdvak: "I" | "II";
+  zwakeDomeinen: string[]; // domein ids
+  notities?: string;
+  vakId: string;
+  aangemaakt: string;
+}
+
+export interface TrackerData {
+  oefenExamens: OefenExamen[];
+  streefCijfer: number;
+}
+
 export interface HerhaalItem {
   id?: string;                         // Firestore document ID (populated on load)
   leerdoelId: string;

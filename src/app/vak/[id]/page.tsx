@@ -282,6 +282,10 @@ export default function VakDetailPage({ params }: { params: Promise<{ id: string
               )}
               {!vak.isSchoolexamen && (
                 <>
+                  <Link href={`/tracker/${id}`} className="btn-secondary flex items-center justify-center gap-2 text-sm" style={{ minHeight: 44 }}>
+                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    Tracker
+                  </Link>
                   <button onClick={() => setSimulatorOpen(true)} className="btn-secondary flex items-center justify-center gap-2 text-sm" style={{ minHeight: 44 }}>
                     <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                     Start examen simulator
