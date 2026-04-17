@@ -263,6 +263,7 @@ const stats = [
   { value: "5000+", label: "Oefenvragen" },
   { value: "100%", label: "Syllabus dekking" },
   { value: "Gratis", label: "Geen kosten" },
+  { value: "Tracker", label: "Analyseer zwakke punten" },
 ];
 
 const steps = [
@@ -367,6 +368,17 @@ const features = [
     icon: (
       <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
         <path d="M4.745 3A23.933 23.933 0 003 12c0 3.183.62 6.22 1.745 9M19.255 3C20.38 5.78 21 8.817 21 12s-.62 6.22-1.745 9M8.25 8.885l1.444-.89a.75.75 0 011.105.402l2.402 7.206a.75.75 0 001.104.401l1.445-.889" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    ),
+  },
+  {
+    title: "Examentracker",
+    desc: "Houd bij wat je scoort op oefenexamens. ExamFlow analyseert je zwakke punten en koppelt ze direct aan de leerdoelen die je nog moet oefenen.",
+    color: "#9333EA",
+    bg: "#FAF5FF",
+    icon: (
+      <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     ),
   },
@@ -506,7 +518,7 @@ export default function Home() {
       {/* ── C. Stats ──────────────────────────────────────────────────────── */}
       <AnimatedSection>
         <div className="max-w-4xl mx-auto px-4 sm:px-6" style={{ paddingTop: isMobile ? 24 : 32, paddingBottom: isMobile ? 24 : 32, paddingLeft: isMobile ? 20 : undefined, paddingRight: isMobile ? 20 : undefined, background: "#F8F9FC" }}>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
             {stats.map((s, i) => (
               <StatCard key={i} value={s.value} label={s.label} index={i} compact={isMobile} />
             ))}
