@@ -263,7 +263,9 @@ export default function TrackerPage({ params }: { params: Promise<{ vakId: strin
 
     // Herbereken zwakeDomeinen op basis van resterende examens
     const resterendeExamens = examens.filter((e) => e.id !== exId);
-    const nieuweZwakeDomeinen = [...new Set(resterendeExamens.flatMap((e) => e.zwakeDomeinen ?? []))];
+    const nieuweZwakeDomeinen = resterendeExamens.length === 0
+      ? []
+      : [...new Set(resterendeExamens.flatMap((e) => e.zwakeDomeinen ?? []))];
 
     // Update Firestore
     await setDoc(doc(db, "users", user.uid, "tracker", vakId), { zwakeDomeinen: nieuweZwakeDomeinen }, { merge: true });
